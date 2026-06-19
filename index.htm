@@ -110,7 +110,15 @@ select, input[type=number], input[type=text] {
   transition: border-color .18s, box-shadow .18s;
   -webkit-appearance: none;
 }
-select { height: 62px; font-size: 19px; cursor: pointer; }
+select {
+  height: 62px;
+  font-size: 19px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24'%3E%3Cpath fill='%23555' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 46px;
+}
 select:focus, input:focus {
   border-color: #1a56a0;
   box-shadow: 0 0 0 3px rgba(26,86,160,.15);
@@ -380,6 +388,7 @@ input.inp-grande {
     <label class="lbl">Selecione o arquivo Excel (xlsx)</label>
     <input type="file" id="fileXlsx" accept=".xlsx,.xls">
     <div class="arq-status" id="statusArquivo"></div>
+    <button class="btn btn-outline" id="btnTrocarAba" style="display:none" onclick="mostrarSeletorAba()">↕&nbsp;&nbsp;Trocar aba</button>
   </div>
 
   <!-- PASSO 1b: Selecionar aba (exibido apenas quando necessário) -->
@@ -520,7 +529,7 @@ function numFmt(v) {
 }
 
 function findCol(headers, keys) {
-  return headers.find(h =>
+  return headers.findIndex(h =>
     h && keys.some(k => h.toLowerCase().trim() === k.toLowerCase())
   );
 }
@@ -554,23 +563,25 @@ function processarAba(ws) {
   const headers = data[0].map(c => String(c).trim());
   const rows    = data.slice(1);
 
-  const colOf  = findCol(headers, ['of']);
-  const colCli = findCol(headers, ['cliente', 'client']);
-  const colOC  = findCol(headers, ['oc', 'o.c', 'o.c.', 'ordem de compra', 'ordem compra',
-                                    'oc cliente', 'pedido cliente', 'nro pedido', 'nr pedido', 'num pedido']);
-  const colQtd = findCol(headers, ['qtde pedido', 'quantidade pedido', 'qtde.pedido',
-                                    'qtd pedido', 'qtde_pedido', 'qtde chapa', 'qtd chapas',
-                                    'quantidade', 'qtde']);
+  const colOf     = findCol(headers, ['of']);
+  const colCli    = findCol(headers, ['cliente', 'client']);
+  const colOC     = findCol(headers, ['oc', 'o.c', 'o.c.', 'ordem de compra', 'ordem compra',
+                                      'oc cliente', 'pedido cliente', 'nro pedido', 'nr pedido', 'num pedido']);
+  const colQtd    = findCol(headers, ['qtde pedido', 'quantidade pedido', 'qtde.pedido',
+                                      'qtd pedido', 'qtde_pedido', 'qtde chapa', 'qtd chapas',
+                                      'quantidade', 'qtde']);
+  const colMedida = findCol(headers, ['sliter vincadeira', 'sliter', 'vincadeira', 'medida']);
 
-  if (!colOf) return null;
+  if (colOf < 0) return null;
 
   return rows
     .filter(r => r[colOf] && !isNaN(parseFloat(r[colOf])) && parseFloat(r[colOf]) > 100000)
     .map(r => ({
       of:         String(r[colOf]).trim().split('.')[0],
-      cliente:    colCli ? String(r[colCli]).trim() : '',
-      oc:         colOC  ? String(r[colOC]).trim()  : '',
-      qtdePedido: colQtd ? (parseFloat(String(r[colQtd]).replace(',', '.')) || 0) : 0,
+      cliente:    colCli >= 0    ? String(r[colCli]).trim()    : '',
+      oc:         colOC >= 0     ? String(r[colOC]).trim()     : '',
+      qtdePedido: colQtd >= 0    ? (parseFloat(String(r[colQtd]).replace(',', '.')) || 0) : 0,
+      medida:     colMedida >= 0 ? String(r[colMedida]).trim() : '',
     }));
 }
 
@@ -617,6 +628,13 @@ document.getElementById('fileXlsx').addEventListener('change', function(e) {
   reader.readAsArrayBuffer(file);
 });
 
+function mostrarSeletorAba() {
+  document.getElementById('cardAba').style.display = 'block';
+  setTimeout(() => {
+    document.getElementById('cardAba').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 50);
+}
+
 function carregarAba() {
   const aba = document.getElementById('selAba').value;
   const r = processarAba(workbook.Sheets[aba]);
@@ -628,6 +646,7 @@ function carregarAba() {
 function popularOrdens(lista, aba) {
   ordens = lista;
   mostrarStatus('✓ ' + ordens.length + ' OF(s) carregadas · Aba: ' + aba, true);
+  document.getElementById('btnTrocarAba').style.display = 'block';
   document.getElementById('cardAba').style.display = 'none';
   document.getElementById('cardOf').style.display = 'block';
   document.getElementById('numPassoOf').textContent = '2';
@@ -698,6 +717,8 @@ function selecionarOf() {
     html += '<div class="info-linha">Cliente: <strong>' + esc(ofAtual.cliente) + '</strong></div>';
   if (ofAtual.oc && ofAtual.oc !== '' && ofAtual.oc !== '0')
     html += '<div class="info-linha">OC: <strong>' + esc(ofAtual.oc) + '</strong></div>';
+  if (ofAtual.medida && ofAtual.medida !== '' && ofAtual.medida.toLowerCase() !== 'x')
+    html += '<div class="info-linha">Medida: <strong>' + esc(ofAtual.medida) + '</strong></div>';
   if (ofAtual.qtdePedido)
     html += '<div class="info-linha">Qtde do Pedido: <strong>' + fmt(ofAtual.qtdePedido) + ' chapas</strong></div>';
 
@@ -899,7 +920,7 @@ function gerarExcel() {
     ['ROMANEIO DE EXPEDIÇÃO - PRIME ONDULADOS'],
     ['Gerado em: ' + new Date().toLocaleString('pt-BR')],
     [],
-    ['Cliente', 'OF', 'Ordem de Compra (OC)', 'Nº Palete', 'Qtde Palete (chapas)', 'Qtde Pedido (chapas)']
+    ['Cliente', 'OF', 'Ordem de Compra (OC)', 'Medida (Sliter)', 'Nº Palete', 'Qtde Palete (chapas)', 'Qtde Pedido (chapas)']
   ];
 
   ofs.forEach(ofNum => {
@@ -910,6 +931,7 @@ function gerarExcel() {
         ord ? ord.cliente    : '',
         ofNum,
         ord ? ord.oc         : '',
+        ord ? ord.medida     : '',
         p.num,
         p.qtd,
         ord && ord.qtdePedido ? ord.qtdePedido : ''
@@ -922,6 +944,7 @@ function gerarExcel() {
     { wch: 32 }, // Cliente
     { wch: 12 }, // OF
     { wch: 22 }, // OC
+    { wch: 20 }, // Medida
     { wch: 12 }, // Nº Palete
     { wch: 24 }, // Qtde Palete
     { wch: 24 }, // Qtde Pedido
