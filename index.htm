@@ -570,7 +570,8 @@ function processarAba(ws) {
   const colQtd    = findCol(headers, ['qtde pedido', 'quantidade pedido', 'qtde.pedido',
                                       'qtd pedido', 'qtde_pedido', 'qtde chapa', 'qtd chapas',
                                       'quantidade', 'qtde']);
-  const colMedida = findCol(headers, ['sliter vincadeira', 'sliter', 'vincadeira', 'medida']);
+  const colLargura     = findCol(headers, ['largura']);
+  const colComprimento = findCol(headers, ['comprimento', 'comprimento (facão)', 'comprimento (facao)', 'fação', 'facao']);
 
   if (colOf < 0) return null;
 
@@ -581,7 +582,8 @@ function processarAba(ws) {
       cliente:    colCli >= 0    ? String(r[colCli]).trim()    : '',
       oc:         colOC >= 0     ? String(r[colOC]).trim()     : '',
       qtdePedido: colQtd >= 0    ? (parseFloat(String(r[colQtd]).replace(',', '.')) || 0) : 0,
-      medida:     colMedida >= 0 ? String(r[colMedida]).trim() : '',
+      largura:      colLargura >= 0     ? numFmt(r[colLargura])     : '',
+      comprimento:  colComprimento >= 0 ? numFmt(r[colComprimento]) : '',
     }));
 }
 
@@ -717,8 +719,8 @@ function selecionarOf() {
     html += '<div class="info-linha">Cliente: <strong>' + esc(ofAtual.cliente) + '</strong></div>';
   if (ofAtual.oc && ofAtual.oc !== '' && ofAtual.oc !== '0')
     html += '<div class="info-linha">OC: <strong>' + esc(ofAtual.oc) + '</strong></div>';
-  if (ofAtual.medida && ofAtual.medida !== '' && ofAtual.medida.toLowerCase() !== 'x')
-    html += '<div class="info-linha">Medida: <strong>' + esc(ofAtual.medida) + '</strong></div>';
+  if (ofAtual.largura || ofAtual.comprimento)
+    html += '<div class="info-linha">Medida: <strong>' + esc(ofAtual.largura) + ' x ' + esc(ofAtual.comprimento) + '</strong></div>';
   if (ofAtual.qtdePedido)
     html += '<div class="info-linha">Qtde do Pedido: <strong>' + fmt(ofAtual.qtdePedido) + ' chapas</strong></div>';
 
@@ -920,7 +922,7 @@ function gerarExcel() {
     ['ROMANEIO DE EXPEDIÇÃO - PRIME ONDULADOS'],
     ['Gerado em: ' + new Date().toLocaleString('pt-BR')],
     [],
-    ['Cliente', 'OF', 'Ordem de Compra (OC)', 'Medida (Sliter)', 'Nº Palete', 'Qtde Palete (chapas)', 'Qtde Pedido (chapas)']
+    ['Cliente', 'OF', 'Ordem de Compra (OC)', 'Largura', 'Comprimento', 'Nº Palete', 'Qtde Palete (chapas)', 'Qtde Pedido (chapas)']
   ];
 
   ofs.forEach(ofNum => {
@@ -928,10 +930,11 @@ function gerarExcel() {
     const lista = paletes[ofNum];
     lista.forEach(p => {
       romData.push([
-        ord ? ord.cliente    : '',
+        ord ? ord.cliente      : '',
         ofNum,
-        ord ? ord.oc         : '',
-        ord ? ord.medida     : '',
+        ord ? ord.oc           : '',
+        ord ? ord.largura      : '',
+        ord ? ord.comprimento  : '',
         p.num,
         p.qtd,
         ord && ord.qtdePedido ? ord.qtdePedido : ''
@@ -944,7 +947,8 @@ function gerarExcel() {
     { wch: 32 }, // Cliente
     { wch: 12 }, // OF
     { wch: 22 }, // OC
-    { wch: 20 }, // Medida
+    { wch: 12 }, // Largura
+    { wch: 16 }, // Comprimento
     { wch: 12 }, // Nº Palete
     { wch: 24 }, // Qtde Palete
     { wch: 24 }, // Qtde Pedido
