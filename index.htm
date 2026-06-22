@@ -409,16 +409,6 @@ input.inp-grande {
       Buscar Ordem de Fabricação (OF)
     </div>
 
-    <label class="lbl">Digite o número da OF:</label>
-    <div class="busca-row">
-      <input type="text" id="buscaOf"
-        placeholder="Ex: 123456"
-        inputmode="numeric"
-        autocomplete="off"
-        oninput="filtrarOf()">
-      <button class="btn-x" onclick="limparBusca()">✕</button>
-    </div>
-
     <label class="lbl">Ou selecione na lista:</label>
     <select id="selOf" onchange="selecionarOf()">
       <option value="">— toque para escolher a OF —</option>
@@ -427,6 +417,16 @@ input.inp-grande {
     <div class="info-of" id="infoOf" style="display:none">
       <div class="info-tit">OF Selecionada</div>
       <div id="infoOfBody"></div>
+    </div>
+
+    <label class="lbl">Digite o número da OF:</label>
+    <div class="busca-row">
+      <input type="text" id="buscaOf"
+        placeholder="Ex: 123456"
+        inputmode="numeric"
+        autocomplete="off"
+        oninput="filtrarOf()">
+      <button class="btn-x" onclick="limparBusca()">✕</button>
     </div>
   </div>
 
