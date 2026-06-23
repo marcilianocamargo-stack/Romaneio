@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#1a56a0">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -385,8 +385,8 @@ input.inp-grande {
       <span class="step-num">1</span>
       Carregar Programação
     </div>
-    <label class="lbl">Selecione o arquivo Excel (xlsx)</label>
-    <input type="file" id="fileXlsx" accept=".xlsx,.xls">
+    <label class="lbl" for="fileXlsx">Selecione o arquivo Excel (xlsx)</label>
+    <input type="file" id="fileXlsx" accept=".xlsx,.xls" title="Selecione o arquivo Excel">
     <div class="arq-status" id="statusArquivo"></div>
     <button class="btn btn-outline" id="btnTrocarAba" style="display:none" onclick="mostrarSeletorAba()">↕&nbsp;&nbsp;Trocar aba</button>
   </div>
@@ -397,8 +397,8 @@ input.inp-grande {
       <span class="step-num">2</span>
       Selecionar Data / Aba
     </div>
-    <label class="lbl">Qual aba tem as OFs?</label>
-    <select id="selAba"></select>
+    <label class="lbl" for="selAba">Qual aba tem as OFs?</label>
+    <select id="selAba" title="Selecionar aba"></select>
     <button class="btn" onclick="carregarAba()">Carregar esta aba</button>
   </div>
 
@@ -409,8 +409,8 @@ input.inp-grande {
       Buscar Ordem de Fabricação (OF)
     </div>
 
-    <label class="lbl">Ou selecione na lista:</label>
-    <select id="selOf" onchange="selecionarOf()">
+    <label class="lbl" for="selOf">Ou selecione na lista:</label>
+    <select id="selOf" onchange="selecionarOf()" title="Selecionar OF">
       <option value="">— toque para escolher a OF —</option>
     </select>
 
@@ -419,7 +419,7 @@ input.inp-grande {
       <div id="infoOfBody"></div>
     </div>
 
-    <label class="lbl">Digite o número da OF:</label>
+    <label class="lbl" for="buscaOf">Digite o número da OF:</label>
     <div class="busca-row">
       <input type="text" id="buscaOf"
         placeholder="Ex: 123456"
@@ -439,7 +439,7 @@ input.inp-grande {
 
     <div class="grid2">
       <div>
-        <label class="lbl">Nº do Palete</label>
+        <label class="lbl" for="numPalete">Nº do Palete</label>
         <input class="inp-grande" type="number"
           id="numPalete"
           min="1" max="999"
@@ -448,7 +448,7 @@ input.inp-grande {
           onkeydown="teclaNumPalete(event)">
       </div>
       <div>
-        <label class="lbl">Qtde de Chapas</label>
+        <label class="lbl" for="qtdPalete">Qtde de Chapas</label>
         <input class="inp-grande" type="number"
           id="qtdPalete"
           min="1"
