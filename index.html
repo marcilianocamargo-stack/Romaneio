@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#1a56a0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Romaneio Prime">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Romaneio de Expedição · Prime Ondulados</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #d6e4f4;
+  min-height: 100vh;
+  padding: 14px 12px 50px;
+  font-size: 18px;
+}
+
+.wrap { max-width: 620px; margin: 0 auto; }
+
+.header {
+  background: #1a56a0;
+  border-radius: 16px;
+  padding: 20px 22px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.logo-box {
+  background: white;
+  border-radius: 10px;
+  padding: 7px 14px;
+  font-weight: 900;
+  font-size: 22px;
+  color: #1a56a0;
+  flex-shrink: 0;
+  letter-spacing: .5px;
+}
+.header-txt h1 { color: white; font-size: 22px; font-weight: 700; line-height: 1.2; }
+.header-txt p  { color: #a8c8f0; font-size: 15px; margin-top: 3px; }
+
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 22px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.10);
+}
+
+.step-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 800;
+  color: #1a56a0;
+  font-size: 17px;
+  margin-bottom: 18px;
+}
+.step-num {
+  background: #1a56a0;
+  color: white;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.lbl {
+  display: block;
+  font-size: 16px;
+  color: #444;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+input[type=file] {
+  display: block;
+  width: 100%;
+  padding: 14px 0;
+  font-size: 17px;
+  color: #333;
+  cursor: pointer;
+}
+
+select, input[type=number], input[type=text] {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 2.5px solid #b8cfe8;
+  font-size: 20px;
+  color: #111;
+  background: #f4f8ff;
+  outline: none;
+  transition: border-color .18s, box-shadow .18s;
+  -webkit-appearance: none;
+}
+select {
+  height: 62px;
+  font-size: 19px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24'%3E%3Cpath fill='%23555' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 46px;
+}
+select:focus, input:focus {
+  border-color: #1a56a0;
+  box-shadow: 0 0 0 3px rgba(26,86,160,.15);
+  background: #fff;
+}
+
+input.inp-grande {
+  font-size: 36px;
+  font-weight: 800;
+  text-align: center;
+  height: 80px;
+  letter-spacing: 1px;
+}
+
+.busca-row { display: flex; gap: 10px; margin-bottom: 12px; }
+.busca-row input { flex: 1; }
+.busca-row .btn-x {
+  padding: 0 20px;
+  height: 62px;
+  border-radius: 12px;
+  border: 2.5px solid #b8cfe8;
+  background: #f4f8ff;
+  color: #555;
+  font-size: 22px;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-weight: 700;
+  transition: background .15s;
+}
+.busca-row .btn-x:active { background: #e0e8f4; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.btn {
+  display: block;
+  width: 100%;
+  padding: 20px;
+  border-radius: 14px;
+  border: none;
+  background: #1a56a0;
+  color: white;
+  font-weight: 800;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(26,86,160,.35);
+  margin-top: 14px;
+  letter-spacing: .3px;
+  min-height: 66px;
+  transition: transform .1s, box-shadow .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:active { transform: scale(.97); box-shadow: 0 2px 8px rgba(26,86,160,.25); }
+.btn:disabled { background: #7aabdc; cursor: default; box-shadow: none; transform: none; }
+
+.btn-verde  { background: #2e7d32; box-shadow: 0 4px 14px rgba(46,125,50,.35); }
+.btn-laranja{ background: #d84315; box-shadow: 0 4px 14px rgba(216,67,21,.35); }
+.btn-cinza  { background: #455a64; box-shadow: 0 4px 14px rgba(69,90,100,.30); margin-top: 10px; }
+.btn-outline {
+  background: white;
+  color: #1a56a0;
+  border: 2.5px solid #1a56a0;
+  box-shadow: none;
+  margin-top: 10px;
+}
+
+.info-of {
+  background: #eef4ff;
+  border: 2px solid #b8cfe8;
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-top: 14px;
+}
+.info-of .info-tit {
+  font-weight: 800;
+  color: #1a56a0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 10px;
+}
+.info-linha { font-size: 19px; padding: 4px 0; color: #222; line-height: 1.4; }
+.info-linha strong { color: #1a56a0; font-weight: 800; }
+
+.lista-tit {
+  font-weight: 800;
+  font-size: 16px;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2.5px solid #e0eaf4;
+}
+
+.palete-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f0f6ff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border-left: 5px solid #1a56a0;
+}
+.pi-num { font-weight: 800; font-size: 20px; color: #1a56a0; }
+.pi-qtd { font-size: 17px; color: #444; margin-top: 2px; }
+.pi-del {
+  background: #fdecea;
+  border: none;
+  border-radius: 10px;
+  width: 50px;
+  height: 50px;
+  font-size: 22px;
+  cursor: pointer;
+  color: #c62828;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s;
+}
+.pi-del:active { background: #f5c6c5; }
+
+.lista-vazia { text-align: center; color: #999; font-size: 18px; padding: 24px 0; font-style: italic; }
+
+.total-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #e8f5e9;
+  border: 2.5px solid #4caf50;
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.total-bar .t-col { display: flex; flex-direction: column; }
+.total-bar .t-lbl { font-size: 14px; color: #388e3c; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+.total-bar .t-num { font-size: 32px; font-weight: 900; color: #2e7d32; line-height: 1.1; }
+
+.total-bar.alerta   { background: #fff8e1; border-color: #f9a825; }
+.total-bar.alerta   .t-lbl, .total-bar.alerta   .t-num { color: #f57f17; }
+.total-bar.excedido { background: #fdecea; border-color: #e53935; }
+.total-bar.excedido .t-lbl, .total-bar.excedido .t-num { color: #c62828; }
+
+.resumo-item {
+  background: #f0f6ff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border-left: 5px solid #1a56a0;
+}
+.resumo-item .ri-tit { font-weight: 800; font-size: 17px; color: #1a56a0; }
+.resumo-item .ri-det { font-size: 16px; color: #444; margin-top: 4px; }
+
+.msg {
+  border-radius: 12px;
+  padding: 16px 18px;
+  font-size: 19px;
+  font-weight: 700;
+  margin-top: 14px;
+  text-align: center;
+  display: none;
+}
+.msg.ok   { background: #e8f5e9; color: #2e7d32; }
+.msg.err  { background: #fdecea; color: #c62828; }
+
+.arq-status {
+  font-size: 17px;
+  font-weight: 700;
+  margin-top: 12px;
+  display: none;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+.arq-status.ok   { background: #e8f5e9; color: #2e7d32; }
+.arq-status.err  { background: #fdecea; color: #c62828; }
+.arq-status.info { background: #e3f2fd; color: #1565c0; }
+
+.flash-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.flash-overlay.show { opacity: 1; }
+.flash-box {
+  background: #2e7d32;
+  color: white;
+  border-radius: 20px;
+  padding: 30px 50px;
+  font-size: 28px;
+  font-weight: 900;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0,0,0,.35);
+  transform: scale(0.8);
+  transition: transform .18s;
+}
+.flash-overlay.show .flash-box { transform: scale(1); }
+
+.footer { margin-top: 20px; text-align: center; color: #7a9abf; font-size: 14px; padding-bottom: 24px; }
+
+@media (max-width: 420px) {
+  body { padding: 10px 8px 40px; }
+  .grid2 { grid-template-columns: 1fr; }
+  input.inp-grande { font-size: 30px; height: 72px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="logo-box">PRIME</div>
+    <div class="header-txt">
+      <h1>Romaneio de Expedição</h1>
+      <p>Prime Ondulados · Santa Maria do Oeste</p>
+    </div>
+  </div>
+
+  <div class="card" id="cardArquivo">
+    <div class="step-title"><span class="step-num">1</span>Carregar Programação</div>
+    <label class="lbl">Selecione o arquivo Excel (xlsx)</label>
+    <input type="file" id="fileXlsx" accept=".xlsx,.xls">
+    <div class="arq-status" id="statusArquivo"></div>
+    <button class="btn btn-outline" id="btnTrocarAba" style="display:none" onclick="mostrarSeletorAba()">↕&nbsp;&nbsp;Trocar aba</button>
+  </div>
+
+  <div class="card" id="cardAba" style="display:none">
+    <div class="step-title"><span class="step-num">2</span>Selecionar Data / Aba</div>
+    <label class="lbl">Qual aba tem as OFs?</label>
+    <select id="selAba"></select>
+    <button class="btn" onclick="carregarAba()">Carregar esta aba</button>
+  </div>
+
+  <div class="card" id="cardOf" style="display:none">
+    <div class="step-title"><span class="step-num" id="numPassoOf">2</span>Buscar Ordem de Fabricação (OF)</div>
+    <label class="lbl">Digite o número da OF:</label>
+    <div class="busca-row">
+      <input type="text" id="buscaOf" placeholder="Ex: 123456" inputmode="numeric" autocomplete="off" oninput="filtrarOf()">
+      <button class="btn-x" onclick="limparBusca()">✕</button>
+    </div>
+    <label class="lbl">Ou selecione na lista:</label>
+    <select id="selOf" onchange="selecionarOf()">
+      <option value="">— toque para escolher a OF —</option>
+    </select>
+    <div class="info-of" id="infoOf" style="display:none">
+      <div class="info-tit">OF Selecionada</div>
+      <div id="infoOfBody"></div>
+    </div>
+  </div>
+
+  <div class="card" id="cardPalete" style="display:none">
+    <div class="step-title"><span class="step-num" id="numPassoPalete">3</span>Registrar Palete</div>
+    <div class="grid2">
+      <div>
+        <label class="lbl">Nº do Palete</label>
+        <input class="inp-grande" type="number" id="numPalete" min="1" max="999" placeholder="01" inputmode="numeric" onkeydown="teclaNumPalete(event)">
+      </div>
+      <div>
+        <label class="lbl">Qtde de Chapas</label>
+        <input class="inp-grande" type="number" id="qtdPalete" min="1" placeholder="000" inputmode="numeric" onkeydown="teclaQtd(event)">
+      </div>
+    </div>
+    <button class="btn btn-verde" onclick="salvarPalete()">✓&nbsp;&nbsp;SALVAR PALETE</button>
+    <div class="msg" id="msgPalete"></div>
+  </div>
+
+  <div class="card" id="cardLista" style="display:none">
+    <div class="step-title" style="margin-bottom:14px">Paletes Registrados</div>
+    <div class="total-bar" id="totalBar">
+      <div class="t-col">
+        <span class="t-lbl">Total produzido</span>
+        <span class="t-num" id="totalProd">0</span>
+      </div>
+      <div class="t-col" id="totalPedidoCol" style="text-align:right;display:none">
+        <span class="t-lbl">Qtde pedido</span>
+        <span class="t-num" id="totalPedido">0</span>
+      </div>
+    </div>
+    <div class="lista-tit">Lista de paletes</div>
+    <div id="listaPaletes"><div class="lista-vazia">Nenhum palete registrado</div></div>
+  </div>
+
+  <div class="card" id="cardGerar" style="display:none">
+    <div class="step-title"><span class="step-num">✓</span>Gerar Romaneio</div>
+    <div id="resumoGeral"></div>
+    <button class="btn btn-laranja" onclick="gerarExcel()">⬇&nbsp;&nbsp;BAIXAR EXCEL (ROMANEIO)</button>
+    <button class="btn btn-cinza" onclick="novaOf()">+&nbsp;&nbsp;Registrar outra OF</button>
+  </div>
+
+  <div class="footer">Romaneio de Expedição · Prime Ondulados</div>
+</div>
+
+<div class="flash-overlay" id="flashOverlay">
+  <div class="flash-box" id="flashBox">✓ Palete Salvo!</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ========== SERVICE WORKER ==========
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+// ========== ESTADO ==========
+let workbook = null;
+let ordens   = [];
+let ofAtual  = null;
+let paletes  = {};
+
+// ========== UTILITÁRIOS ==========
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmt(n) { return Number(n).toLocaleString('pt-BR'); }
+
+// Normaliza string: minúsculas, sem acento
+function norm(s) {
+  return String(s).trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// Busca índice de coluna com 3 níveis: exato → parcial → inverso
+function findCol(headers, keys) {
+  const normed = headers.map(norm);
+  for (const k of keys) {
+    const i = normed.findIndex(h => h === norm(k));
+    if (i >= 0) return i;
+  }
+  for (const k of keys) {
+    const i = normed.findIndex(h => h.includes(norm(k)));
+    if (i >= 0) return i;
+  }
+  for (const k of keys) {
+    const nk = norm(k);
+    const i = normed.findIndex(h => h.length >= 2 && nk.includes(h));
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
+// ========== DETECÇÃO DE CABEÇALHO ==========
+function detectarCabecalho(data) {
+  const colsChave = ['of','cliente','qtde','pedido','medida','sliter',
+                     'oc','largura','comprimento','seq','data','ml'];
+  let melhorLinha = 0, melhorPts = -1;
+
+  for (let r = 0; r < Math.min(15, data.length); r++) {
+    const row = data[r].map(c => norm(String(c)));
+    let pts = row.filter(h => colsChave.some(k => h.includes(k))).length;
+    if (row.filter(h => h && isNaN(parseFloat(h))).length < 2) pts -= 3;
+    if (row.some(h => h === 'of')) pts += 5;
+    if (pts > melhorPts) { melhorPts = pts; melhorLinha = r; }
+  }
+  return melhorLinha;
+}
+
+// ========== VALIDAÇÃO E EXTRAÇÃO DE OF ==========
+function isOfValida(val) {
+  if (val === null || val === undefined || val === '') return false;
+  const s = String(val).trim().replace(/\.0*$/, '');
+  return /^\d+$/.test(s) && parseInt(s, 10) > 100000;
+}
+function extrairOf(val) { return String(val).trim().split('.')[0]; }
+
+// ========== PROCESSAR ABA ==========
+function processarAba(ws) {
+  const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+  if (!data || data.length < 2) return null;
+
+  const startRow = detectarCabecalho(data);
+  const headers  = data[startRow].map(c => String(c).trim());
+  const rows     = data.slice(startRow + 1);
+
+  const colOf  = findCol(headers, ['of','ordem fabricacao','ordem de fabricacao','o.f','o.f.','num of','nro of']);
+  const colCli = findCol(headers, ['cliente','client','razao social','nome cliente']);
+  const colOC  = findCol(headers, ['oc','o.c','o.c.','ordem compra','ordem de compra','oc cliente','pedido cliente','nro pedido','nr pedido','num pedido','pedido']);
+  const colQtd = findCol(headers, ['qtde pedido','qtde. pedido','quantidade pedido','qtd pedido','qtde chapa','qtd chapas','chapas','qtde prod','qtde. prod','quantidade prod','quantidade','qtde']);
+  const colMed = findCol(headers, ['sliter vincadeira','sliter','vincadeira','medida','formato']);
+  const colLarg = findCol(headers, ['largura','larg']);
+  const colComp = findCol(headers, ['comprimento','comp','facao']);
+
+  // Fallback: encontra coluna com mais valores > 100000 se não achou "OF"
+  let colOfFinal = colOf;
+  if (colOfFinal < 0) {
+    const scores = headers.map((_, ci) => rows.filter(r => isOfValida(r[ci])).length);
+    const max = Math.max(...scores);
+    if (max > 0) colOfFinal = scores.indexOf(max);
+  }
+  if (colOfFinal < 0) return null;
+
+  const resultado = rows
+    .filter(r => isOfValida(r[colOfFinal]))
+    .map(r => {
+      let medida = '';
+      if (colMed >= 0 && String(r[colMed]).trim() && norm(r[colMed]) !== 'x') {
+        medida = String(r[colMed]).trim();
+      } else if (colLarg >= 0 && colComp >= 0) {
+        const lg = String(r[colLarg]).trim(), cp = String(r[colComp]).trim();
+        if (lg && cp && lg !== '0' && cp !== '0') medida = lg + ' × ' + cp;
+      }
+      return {
+        of:         extrairOf(r[colOfFinal]),
+        cliente:    colCli >= 0 ? String(r[colCli]).trim() : '',
+        oc:         colOC  >= 0 ? String(r[colOC]).trim()  : '',
+        qtdePedido: colQtd >= 0 ? (parseFloat(String(r[colQtd]).replace(',','.')) || 0) : 0,
+        medida,
+      };
+    });
+
+  // Deduplicar mantendo maior qtdePedido
+  const mapa = new Map();
+  for (const o of resultado) {
+    if (!mapa.has(o.of) || o.qtdePedido > mapa.get(o.of).qtdePedido) mapa.set(o.of, o);
+  }
+  return [...mapa.values()];
+}
+
+// ========== CARREGAR ARQUIVO ==========
+document.getElementById('fileXlsx').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  mostrarStatus('Lendo arquivo...', 'info');
+
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      workbook = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
+      const abas = workbook.SheetNames;
+      const selAba = document.getElementById('selAba');
+      selAba.innerHTML = '';
+      abas.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = a;
+        selAba.appendChild(opt);
+      });
+
+      // Escolhe a aba com mais OFs
+      let melhorAba = null, melhorQtd = 0, melhorOrdens = null;
+      for (const aba of abas) {
+        const r = processarAba(workbook.Sheets[aba]);
+        if (r && r.length > melhorQtd) { melhorQtd = r.length; melhorAba = aba; melhorOrdens = r; }
+      }
+
+      if (melhorAba) {
+        selAba.value = melhorAba;
+        popularOrdens(melhorOrdens, melhorAba);
+      } else {
+        document.getElementById('cardAba').style.display = 'block';
+        mostrarStatus('Não foi possível detectar OFs. Selecione a aba correta.', 'err');
+      }
+    } catch (err) {
+      mostrarStatus('Erro ao ler o arquivo: ' + err.message, 'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function mostrarSeletorAba() {
+  document.getElementById('cardAba').style.display = 'block';
+  setTimeout(() => document.getElementById('cardAba').scrollIntoView({ behavior:'smooth', block:'nearest' }), 50);
+}
+
+function carregarAba() {
+  const aba = document.getElementById('selAba').value;
+  const r = processarAba(workbook.Sheets[aba]);
+  if (!r)        { alert('Coluna OF não encontrada nesta aba.'); return; }
+  if (!r.length) { alert('Nenhuma OF encontrada nesta aba.'); return; }
+  popularOrdens(r, aba);
+}
+
+function popularOrdens(lista, aba) {
+  ordens = lista;
+  mostrarStatus('✓ ' + ordens.length + ' OF(s) carregadas · Aba: ' + aba, 'ok');
+  document.getElementById('btnTrocarAba').style.display = 'block';
+  document.getElementById('cardAba').style.display      = 'none';
+  document.getElementById('cardOf').style.display       = 'block';
+  document.getElementById('numPassoOf').textContent      = '2';
+  document.getElementById('numPassoPalete').textContent  = '3';
+  preencherSelect(ordens);
+}
+
+// ========== SELECT DE OF ==========
+function preencherSelect(lista) {
+  const sel = document.getElementById('selOf');
+  sel.innerHTML = '<option value="">— toque para escolher a OF —</option>';
+  lista.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o.of;
+    opt.textContent = 'OF ' + o.of + (o.cliente ? '  ·  ' + o.cliente : '');
+    sel.appendChild(opt);
+  });
+}
+
+function filtrarOf() {
+  const busca = document.getElementById('buscaOf').value.trim();
+  if (!busca) { preencherSelect(ordens); return; }
+  const bNorm = norm(busca);
+  const filtradas = ordens.filter(o => o.of.includes(busca) || norm(o.cliente).includes(bNorm));
+  preencherSelect(filtradas);
+  if (filtradas.length === 1) {
+    document.getElementById('selOf').value = filtradas[0].of;
+    selecionarOf();
+  }
+}
+
+function limparBusca() {
+  document.getElementById('buscaOf').value = '';
+  document.getElementById('selOf').value = '';
+  document.getElementById('infoOf').style.display = 'none';
+  document.getElementById('cardPalete').style.display = 'none';
+  document.getElementById('cardLista').style.display = 'none';
+  preencherSelect(ordens);
+  ofAtual = null;
+  atualizarCardGerar();
+}
+
+// ========== SELECIONAR OF ==========
+function selecionarOf() {
+  const of = document.getElementById('selOf').value;
+  if (!of) {
+    document.getElementById('infoOf').style.display = 'none';
+    document.getElementById('cardPalete').style.display = 'none';
+    ofAtual = null;
+    return;
+  }
+  ofAtual = ordens.find(o => o.of === of);
+  if (!ofAtual) return;
+  if (!paletes[of]) paletes[of] = [];
+
+  let html = '';
+  if (ofAtual.cliente) html += '<div class="info-linha">Cliente: <strong>' + esc(ofAtual.cliente) + '</strong></div>';
+  if (ofAtual.oc && ofAtual.oc !== '' && ofAtual.oc !== '0') html += '<div class="info-linha">OC: <strong>' + esc(ofAtual.oc) + '</strong></div>';
+  if (ofAtual.medida && norm(ofAtual.medida) !== 'x') html += '<div class="info-linha">Medida: <strong>' + esc(ofAtual.medida) + '</strong></div>';
+  if (ofAtual.qtdePedido) html += '<div class="info-linha">Qtde do Pedido: <strong>' + fmt(ofAtual.qtdePedido) + ' chapas</strong></div>';
+
+  document.getElementById('infoOfBody').innerHTML = html || '<div class="info-linha" style="color:#999">Sem dados adicionais</div>';
+  document.getElementById('infoOf').style.display     = 'block';
+  document.getElementById('cardPalete').style.display  = 'block';
+  document.getElementById('numPalete').value = '';
+  document.getElementById('qtdPalete').value = '';
+  document.getElementById('msgPalete').style.display = 'none';
+
+  setTimeout(() => {
+    document.getElementById('numPalete').focus();
+    document.getElementById('cardPalete').scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }, 80);
+
+  atualizarLista();
+  atualizarCardGerar();
+}
+
+// ========== TECLADO ==========
+function teclaNumPalete(e) {
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    document.getElementById('qtdPalete').focus();
+    document.getElementById('qtdPalete').select();
+  }
+}
+function teclaQtd(e) {
+  if (e.key === 'Enter') { e.preventDefault(); salvarPalete(); }
+}
+
+// ========== SALVAR PALETE ==========
+function salvarPalete() {
+  if (!ofAtual) return;
+  const numRaw = document.getElementById('numPalete').value.trim();
+  const qtdRaw = document.getElementById('qtdPalete').value.trim();
+  const num = parseInt(numRaw), qtd = parseInt(qtdRaw);
+
+  if (!numRaw || isNaN(num) || num < 1) {
+    mostrarMsgPalete('⚠ Informe o número do palete!', 'err');
+    document.getElementById('numPalete').focus(); return;
+  }
+  if (!qtdRaw || isNaN(qtd) || qtd < 1) {
+    mostrarMsgPalete('⚠ Informe a quantidade de chapas!', 'err');
+    document.getElementById('qtdPalete').focus(); return;
+  }
+
+  const listaOf = paletes[ofAtual.of];
+  const idx = listaOf.findIndex(p => p.num === num);
+  if (idx !== -1) {
+    if (!confirm('PALETE ' + String(num).padStart(2,'0') + ' já registrado com ' + fmt(listaOf[idx].qtd) + ' chapas.\n\nDeseja substituir?'))
+      { document.getElementById('numPalete').focus(); return; }
+    listaOf.splice(idx, 1);
+  }
+
+  listaOf.push({ num, qtd });
+  listaOf.sort((a, b) => a.num - b.num);
+
+  document.getElementById('numPalete').value = '';
+  document.getElementById('qtdPalete').value = '';
+  document.getElementById('msgPalete').style.display = 'none';
+  mostrarFlash('✓  Palete ' + String(num).padStart(2,'0') + '\n' + fmt(qtd) + ' chapas');
+  setTimeout(() => document.getElementById('numPalete').focus(), 80);
+  atualizarLista();
+  atualizarCardGerar();
+}
+
+// ========== LISTA ==========
+function atualizarLista() {
+  if (!ofAtual) return;
+  const lista = paletes[ofAtual.of] || [];
+  document.getElementById('cardLista').style.display = 'block';
+
+  const totalProd = lista.reduce((s, p) => s + p.qtd, 0);
+  const qtdPedido = ofAtual.qtdePedido || 0;
+  const bar = document.getElementById('totalBar');
+  document.getElementById('totalProd').textContent = fmt(totalProd);
+
+  const colPedido = document.getElementById('totalPedidoCol');
+  if (qtdPedido > 0) {
+    colPedido.style.display = 'flex';
+    document.getElementById('totalPedido').textContent = fmt(qtdPedido);
+    bar.className = totalProd > qtdPedido ? 'total-bar excedido'
+                  : (totalProd / qtdPedido >= 0.90 ? 'total-bar alerta' : 'total-bar');
+  } else {
+    colPedido.style.display = 'none';
+    bar.className = 'total-bar';
+  }
+
+  const div = document.getElementById('listaPaletes');
+  div.innerHTML = lista.length === 0
+    ? '<div class="lista-vazia">Nenhum palete registrado ainda</div>'
+    : lista.map(p => `
+      <div class="palete-item">
+        <div>
+          <div class="pi-num">Palete ${String(p.num).padStart(2,'0')}</div>
+          <div class="pi-qtd">${fmt(p.qtd)} chapas</div>
+        </div>
+        <button class="pi-del" onclick="removerPalete(${p.num})">✕</button>
+      </div>`).join('');
+}
+
+function removerPalete(num) {
+  if (!ofAtual) return;
+  if (!confirm('Remover Palete ' + String(num).padStart(2,'0') + '?')) return;
+  paletes[ofAtual.of] = paletes[ofAtual.of].filter(p => p.num !== num);
+  atualizarLista();
+  atualizarCardGerar();
+}
+
+// ========== CARD GERAR ==========
+function atualizarCardGerar() {
+  const ofs = Object.keys(paletes).filter(k => paletes[k].length > 0);
+  const cardGerar = document.getElementById('cardGerar');
+  if (ofs.length === 0) { cardGerar.style.display = 'none'; return; }
+  cardGerar.style.display = 'block';
+
+  document.getElementById('resumoGeral').innerHTML = ofs.map(ofNum => {
+    const ord = ordens.find(o => o.of === ofNum);
+    const lista = paletes[ofNum];
+    const total = lista.reduce((s, p) => s + p.qtd, 0);
+    const ped = ord ? ord.qtdePedido : 0;
+    return `<div class="resumo-item">
+      <div class="ri-tit">OF ${ofNum}${ord && ord.cliente ? '  ·  ' + esc(ord.cliente) : ''}</div>
+      <div class="ri-det">${lista.length} palete(s) &nbsp;·&nbsp; ${fmt(total)} chapas${ped ? ' &nbsp;·&nbsp; Pedido: ' + fmt(ped) : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+function novaOf() {
+  ofAtual = null;
+  document.getElementById('buscaOf').value = '';
+  document.getElementById('selOf').value = '';
+  document.getElementById('infoOf').style.display = 'none';
+  document.getElementById('cardPalete').style.display = 'none';
+  document.getElementById('cardLista').style.display = 'none';
+  preencherSelect(ordens);
+  atualizarCardGerar();
+  setTimeout(() => document.getElementById('cardOf').scrollIntoView({ behavior:'smooth', block:'start' }), 80);
+}
+
+// ========== GERAR EXCEL ==========
+function gerarExcel() {
+  const ofs = Object.keys(paletes).filter(k => paletes[k].length > 0);
+  if (ofs.length === 0) return;
+  const wb = XLSX.utils.book_new();
+
+  const romData = [
+    ['ROMANEIO DE EXPEDIÇÃO - PRIME ONDULADOS'],
+    ['Gerado em: ' + new Date().toLocaleString('pt-BR')],
+    [],
+    ['Cliente','OF','Ordem de Compra (OC)','Medida (Sliter)','Nº Palete','Qtde Palete (chapas)','Qtde Pedido (chapas)']
+  ];
+  ofs.forEach(ofNum => {
+    const ord = ordens.find(o => o.of === ofNum);
+    paletes[ofNum].forEach(p => romData.push([
+      ord ? ord.cliente : '', ofNum, ord ? ord.oc : '', ord ? ord.medida : '',
+      p.num, p.qtd, ord && ord.qtdePedido ? ord.qtdePedido : ''
+    ]));
+  });
+  const wsRom = XLSX.utils.aoa_to_sheet(romData);
+  wsRom['!cols'] = [{wch:32},{wch:12},{wch:22},{wch:20},{wch:12},{wch:24},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, wsRom, 'Romaneio');
+
+  const resData = [
+    ['RESUMO POR ORDEM DE FABRICAÇÃO'], [],
+    ['OF','Cliente','Ordem de Compra (OC)','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
+  ];
+  ofs.forEach(ofNum => {
+    const ord = ordens.find(o => o.of === ofNum);
+    const lista = paletes[ofNum];
+    const total = lista.reduce((s, p) => s + p.qtd, 0);
+    const ped = ord ? ord.qtdePedido : 0;
+    resData.push([ofNum, ord ? ord.cliente : '', ord ? ord.oc : '', ped||'', total, ped?(ped-total):'', lista.length]);
+  });
+  const wsRes = XLSX.utils.aoa_to_sheet(resData);
+  wsRes['!cols'] = [{wch:12},{wch:32},{wch:22},{wch:16},{wch:18},{wch:12},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsRes, 'Resumo');
+
+  const data = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+  const ofStr = ofs.length === 1 ? '_OF'+ofs[0] : '_'+ofs.length+'OFs';
+  XLSX.writeFile(wb, 'Romaneio_Prime'+ofStr+'_'+data+'.xlsx');
+}
+
+// ========== FEEDBACKS ==========
+function mostrarStatus(txt, tipo) {
+  const el = document.getElementById('statusArquivo');
+  el.textContent = txt;
+  el.className = 'arq-status ' + tipo;
+  el.style.display = 'block';
+}
+function mostrarMsgPalete(txt, tipo) {
+  const el = document.getElementById('msgPalete');
+  el.textContent = txt;
+  el.className = 'msg ' + tipo;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+function mostrarFlash(txt) {
+  const overlay = document.getElementById('flashOverlay');
+  const box = document.getElementById('flashBox');
+  box.style.whiteSpace = 'pre-line';
+  box.textContent = txt;
+  overlay.classList.add('show');
+  clearTimeout(overlay._t);
+  overlay._t = setTimeout(() => overlay.classList.remove('show'), 1400);
+}
+</script>
+</body>
+</html>

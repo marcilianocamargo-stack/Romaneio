@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- fundo azul escuro com cantos arredondados -->
+  <rect width="192" height="192" rx="38" fill="#1a56a0"/>
+  <!-- quadrado branco interno (logo box) -->
+  <rect x="22" y="52" width="148" height="60" rx="14" fill="white"/>
+  <!-- texto PRIME -->
+  <text x="96" y="98" font-family="Arial Black, Arial" font-weight="900" font-size="38" fill="#1a56a0" text-anchor="middle" letter-spacing="1">PRIME</text>
+  <!-- texto ondulados embaixo -->
+  <text x="96" y="158" font-family="Arial, sans-serif" font-weight="700" font-size="18" fill="white" text-anchor="middle" letter-spacing="1.5">ONDULADOS</text>
+  <!-- linha decorativa -->
+  <rect x="36" y="168" width="120" height="3" rx="2" fill="rgba(255,255,255,0.4)"/>
+</svg>
