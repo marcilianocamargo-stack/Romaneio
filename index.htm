@@ -2,13 +2,13 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#1a56a0">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Romaneio Prime">
-<link rel="manifest" href="manifest-romaneio.json">
+<link rel="manifest" href="./manifest-romaneio.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Romaneio de Expedição · Prime Ondulados</title>
 <style>
@@ -320,6 +320,7 @@ input.inp-grande {
 }
 .arq-status.ok  { background: #e8f5e9; color: #2e7d32; }
 .arq-status.err { background: #fdecea; color: #c62828; }
+.arq-status.warn { background: #fff8e1; color: #e65100; }
 
 /* ===== FLASH DE SUCESSO ===== */
 .flash-overlay {
@@ -385,8 +386,8 @@ input.inp-grande {
       <span class="step-num">1</span>
       Carregar Programação
     </div>
-    <label class="lbl" for="fileXlsx">Selecione o arquivo Excel (xlsx)</label>
-    <input type="file" id="fileXlsx" accept=".xlsx,.xls" title="Selecione o arquivo Excel">
+    <label class="lbl">Selecione o arquivo Excel (xlsx)</label>
+    <input type="file" id="fileXlsx" accept=".xlsx,.xls">
     <div class="arq-status" id="statusArquivo"></div>
     <button class="btn btn-outline" id="btnTrocarAba" style="display:none" onclick="mostrarSeletorAba()">↕&nbsp;&nbsp;Trocar aba</button>
   </div>
@@ -397,8 +398,8 @@ input.inp-grande {
       <span class="step-num">2</span>
       Selecionar Data / Aba
     </div>
-    <label class="lbl" for="selAba">Qual aba tem as OFs?</label>
-    <select id="selAba" title="Selecionar aba"></select>
+    <label class="lbl">Qual aba tem as OFs?</label>
+    <select id="selAba"></select>
     <button class="btn" onclick="carregarAba()">Carregar esta aba</button>
   </div>
 
@@ -409,17 +410,7 @@ input.inp-grande {
       Buscar Ordem de Fabricação (OF)
     </div>
 
-    <label class="lbl" for="selOf">Ou selecione na lista:</label>
-    <select id="selOf" onchange="selecionarOf()" title="Selecionar OF">
-      <option value="">— toque para escolher a OF —</option>
-    </select>
-
-    <div class="info-of" id="infoOf" style="display:none">
-      <div class="info-tit">OF Selecionada</div>
-      <div id="infoOfBody"></div>
-    </div>
-
-    <label class="lbl" for="buscaOf">Digite o número da OF:</label>
+    <label class="lbl">Digite o número da OF:</label>
     <div class="busca-row">
       <input type="text" id="buscaOf"
         placeholder="Ex: 123456"
@@ -427,6 +418,16 @@ input.inp-grande {
         autocomplete="off"
         oninput="filtrarOf()">
       <button class="btn-x" onclick="limparBusca()">✕</button>
+    </div>
+
+    <label class="lbl">Ou selecione na lista:</label>
+    <select id="selOf" onchange="selecionarOf()">
+      <option value="">— toque para escolher a OF —</option>
+    </select>
+
+    <div class="info-of" id="infoOf" style="display:none">
+      <div class="info-tit">OF Selecionada</div>
+      <div id="infoOfBody"></div>
     </div>
   </div>
 
@@ -439,7 +440,7 @@ input.inp-grande {
 
     <div class="grid2">
       <div>
-        <label class="lbl" for="numPalete">Nº do Palete</label>
+        <label class="lbl">Nº do Palete</label>
         <input class="inp-grande" type="number"
           id="numPalete"
           min="1" max="999"
@@ -448,7 +449,7 @@ input.inp-grande {
           onkeydown="teclaNumPalete(event)">
       </div>
       <div>
-        <label class="lbl" for="qtdPalete">Qtde de Chapas</label>
+        <label class="lbl">Qtde de Chapas</label>
         <input class="inp-grande" type="number"
           id="qtdPalete"
           min="1"
@@ -515,76 +516,192 @@ input.inp-grande {
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
+// ========== SERVICE WORKER ==========
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
 // ========== ESTADO ==========
 let workbook = null;
-let ordens   = [];       // lista de OFs do xlsx
-let ofAtual  = null;     // OF selecionada no momento
-let paletes  = {};       // { "123456": [{num:1,qtd:250}, ...], ... }
+let ordens   = [];
+let ofAtual  = null;
+let paletes  = {};
 
 // ========== UTILITÁRIOS ==========
-function numFmt(v) {
-  if (v === undefined || v === null || v === '') return '';
-  const n = parseFloat(String(v).replace(',', '.'));
-  return isNaN(n) ? String(v).trim() : String(n);
-}
-
-function findCol(headers, keys) {
-  return headers.findIndex(h =>
-    h && keys.some(k => h.toLowerCase().trim() === k.toLowerCase())
-  );
-}
-
 function esc(s) {
   return String(s)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;');
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function fmt(n) {
   return Number(n).toLocaleString('pt-BR');
 }
 
-// ========== LEITURA DO XLSX ==========
-function detectarCabecalho(ws) {
-  const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-  for (let r = 0; r < Math.min(12, data.length); r++) {
-    const row = data[r].map(c => String(c).trim());
-    if (row.some(h => h.toUpperCase() === 'OF')) return r;
-  }
-  return 0;
+function norm(s) {
+  return String(s).trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+// Retorna o índice da coluna mais relevante dado um conjunto de palavras-chave.
+// Usa correspondência exata primeiro, depois parcial (includes), depois fuzzy por palavras.
+function findCol(headers, keys) {
+  const normed = headers.map(norm);
+
+  // 1) Correspondência exata
+  for (const k of keys) {
+    const i = normed.findIndex(h => h === norm(k));
+    if (i >= 0) return i;
+  }
+
+  // 2) Correspondência parcial (header contém a chave)
+  for (const k of keys) {
+    const i = normed.findIndex(h => h.includes(norm(k)));
+    if (i >= 0) return i;
+  }
+
+  // 3) Correspondência inversa (chave contém o header)
+  for (const k of keys) {
+    const nk = norm(k);
+    const i = normed.findIndex(h => h.length >= 2 && nk.includes(h));
+    if (i >= 0) return i;
+  }
+
+  return -1;
+}
+
+// ========== DETECÇÃO DE CABEÇALHO ==========
+// Pontua cada linha e retorna o índice da melhor linha de cabeçalho
+function detectarCabecalho(data) {
+  const colsChave = ['of', 'cliente', 'qtde', 'pedido', 'medida', 'sliter',
+                     'oc', 'largura', 'comprimento', 'seq', 'data', 'ml', 'm2'];
+
+  let melhorLinha = 0;
+  let melhorPontos = -1;
+
+  for (let r = 0; r < Math.min(15, data.length); r++) {
+    const row = data[r].map(c => norm(String(c)));
+    let pts = 0;
+    for (const chave of colsChave) {
+      if (row.some(h => h.includes(chave))) pts++;
+    }
+    // Penalizar linhas com poucos textos (provavelmente dados)
+    const textos = row.filter(h => h && isNaN(parseFloat(h))).length;
+    if (textos < 2) pts -= 3;
+    // Bonus se tem exatamente "of"
+    if (row.some(h => h === 'of')) pts += 5;
+
+    if (pts > melhorPontos) {
+      melhorPontos = pts;
+      melhorLinha = r;
+    }
+  }
+
+  return melhorLinha;
+}
+
+// ========== VALIDAÇÃO DE OF ==========
+// OF válida: número inteiro > 100000 (6+ dígitos)
+function isOfValida(val) {
+  if (val === null || val === undefined || val === '') return false;
+  const s = String(val).trim().replace(/\.0*$/, '');
+  if (!/^\d+$/.test(s)) return false;
+  return parseInt(s, 10) > 100000;
+}
+
+function extrairOf(val) {
+  return String(val).trim().split('.')[0];
+}
+
+// ========== PROCESSAR ABA ==========
 function processarAba(ws) {
-  const startRow = detectarCabecalho(ws);
-  const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', range: startRow });
+  const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
   if (!data || data.length < 2) return null;
 
-  const headers = data[0].map(c => String(c).trim());
-  const rows    = data.slice(1);
+  const startRow = detectarCabecalho(data);
+  const headers  = data[startRow].map(c => String(c).trim());
+  const rows     = data.slice(startRow + 1);
 
-  const colOf     = findCol(headers, ['of']);
-  const colCli    = findCol(headers, ['cliente', 'client']);
-  const colOC     = findCol(headers, ['oc', 'o.c', 'o.c.', 'ordem de compra', 'ordem compra',
-                                      'oc cliente', 'pedido cliente', 'nro pedido', 'nr pedido', 'num pedido']);
-  const colQtd    = findCol(headers, ['qtde pedido', 'quantidade pedido', 'qtde.pedido',
-                                      'qtd pedido', 'qtde_pedido', 'qtde chapa', 'qtd chapas',
-                                      'quantidade', 'qtde']);
-  const colLargura     = findCol(headers, ['largura']);
-  const colComprimento = findCol(headers, ['comprimento', 'comprimento (facão)', 'comprimento (facao)', 'fação', 'facao']);
+  // Mapeamento de colunas com múltiplos sinônimos (ordem = prioridade)
+  const colOf = findCol(headers, [
+    'of', 'ordem fabricacao', 'ordem de fabricacao', 'o.f', 'o.f.', 'num of', 'nro of', 'nr of'
+  ]);
 
-  if (colOf < 0) return null;
+  const colCli = findCol(headers, [
+    'cliente', 'client', 'razao social', 'nome cliente'
+  ]);
 
-  return rows
-    .filter(r => r[colOf] && !isNaN(parseFloat(r[colOf])) && parseFloat(r[colOf]) > 100000)
-    .map(r => ({
-      of:         String(r[colOf]).trim().split('.')[0],
-      cliente:    colCli >= 0    ? String(r[colCli]).trim()    : '',
-      oc:         colOC >= 0     ? String(r[colOC]).trim()     : '',
-      qtdePedido: colQtd >= 0    ? (parseFloat(String(r[colQtd]).replace(',', '.')) || 0) : 0,
-      largura:      colLargura >= 0     ? numFmt(r[colLargura])     : '',
-      comprimento:  colComprimento >= 0 ? numFmt(r[colComprimento]) : '',
-    }));
+  const colOC = findCol(headers, [
+    'oc', 'o.c', 'o.c.', 'ordem compra', 'ordem de compra', 'oc cliente',
+    'pedido cliente', 'nro pedido', 'nr pedido', 'num pedido', 'pedido'
+  ]);
+
+  // "Qtde Pedido" tem prioridade sobre "Qtde Produzida" — procurar primeiro combinações específicas
+  const colQtd = findCol(headers, [
+    'qtde pedido', 'qtde. pedido', 'quantidade pedido', 'qtd pedido', 'qtde_pedido',
+    'qtde chapa', 'qtd chapas', 'chapas', 'qtde prod', 'qtde. prod', 'quantidade prod',
+    'qtde produzida', 'quantidade', 'qtde'
+  ]);
+
+  const colMedida = findCol(headers, [
+    'sliter vincadeira', 'sliter', 'vincadeira', 'medida', 'formato',
+    'largura x comprimento', 'larg x comp'
+  ]);
+
+  const colLarg = findCol(headers, ['largura', 'larg']);
+  const colComp = findCol(headers, ['comprimento', 'comp', 'facao', 'facão']);
+
+  // Se não encontrou coluna OF, tenta identificar automaticamente pela coluna que tem
+  // mais valores numéricos > 100000
+  let colOfFinal = colOf;
+  if (colOfFinal < 0) {
+    const scores = headers.map((_, ci) => {
+      const hits = rows.filter(r => isOfValida(r[ci])).length;
+      return hits;
+    });
+    const max = Math.max(...scores);
+    if (max > 0) colOfFinal = scores.indexOf(max);
+  }
+
+  if (colOfFinal < 0) return null;
+
+  const resultado = rows
+    .filter(r => isOfValida(r[colOfFinal]))
+    .map(r => {
+      // Medida: usa coluna específica ou monta de largura+comprimento
+      let medida = '';
+      if (colMedida >= 0 && String(r[colMedida]).trim() && String(r[colMedida]).trim().toLowerCase() !== 'x') {
+        medida = String(r[colMedida]).trim();
+      } else if (colLarg >= 0 && colComp >= 0) {
+        const lg = String(r[colLarg]).trim();
+        const cp = String(r[colComp]).trim();
+        if (lg && cp && lg !== '0' && cp !== '0') medida = lg + ' × ' + cp;
+      }
+
+      let qtdePedido = 0;
+      if (colQtd >= 0) {
+        qtdePedido = parseFloat(String(r[colQtd]).replace(',', '.')) || 0;
+      }
+
+      return {
+        of:         extrairOf(r[colOfFinal]),
+        cliente:    colCli  >= 0 ? String(r[colCli]).trim()  : '',
+        oc:         colOC   >= 0 ? String(r[colOC]).trim()   : '',
+        qtdePedido,
+        medida,
+      };
+    });
+
+  // Deduplicar OFs mantendo a de maior qtdePedido
+  const mapa = new Map();
+  for (const o of resultado) {
+    if (!mapa.has(o.of) || o.qtdePedido > mapa.get(o.of).qtdePedido) {
+      mapa.set(o.of, o);
+    }
+  }
+
+  return [...mapa.values()];
 }
 
 // ========== CARREGAR ARQUIVO ==========
@@ -592,13 +709,14 @@ document.getElementById('fileXlsx').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
 
+  mostrarStatus('Lendo arquivo...', 'info');
+
   const reader = new FileReader();
   reader.onload = function(ev) {
     try {
-      workbook = XLSX.read(ev.target.result, { type: 'array' });
+      workbook = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
       const abas = workbook.SheetNames;
 
-      // Preencher select de abas
       const selAba = document.getElementById('selAba');
       selAba.innerHTML = '';
       abas.forEach(a => {
@@ -607,24 +725,27 @@ document.getElementById('fileXlsx').addEventListener('change', function(e) {
         selAba.appendChild(opt);
       });
 
-      // Tentar detectar automaticamente uma aba com OFs
-      let encontrou = false;
+      // Tenta cada aba em ordem; pontua qual tem mais OFs
+      let melhorAba = null, melhorQtd = 0, melhorOrdens = null;
+
       for (const aba of abas) {
         const r = processarAba(workbook.Sheets[aba]);
-        if (r && r.length > 0) {
-          selAba.value = aba;
-          popularOrdens(r, aba);
-          encontrou = true;
-          break;
+        if (r && r.length > melhorQtd) {
+          melhorQtd  = r.length;
+          melhorAba  = aba;
+          melhorOrdens = r;
         }
       }
 
-      if (!encontrou) {
+      if (melhorAba) {
+        selAba.value = melhorAba;
+        popularOrdens(melhorOrdens, melhorAba);
+      } else {
         document.getElementById('cardAba').style.display = 'block';
-        mostrarStatus('Não foi possível detectar a aba automaticamente. Selecione a aba correta.', false);
+        mostrarStatus('Não foi possível detectar OFs automaticamente. Selecione a aba correta.', 'err');
       }
     } catch (err) {
-      mostrarStatus('Erro ao ler o arquivo: ' + err.message, false);
+      mostrarStatus('Erro ao ler o arquivo: ' + err.message, 'err');
     }
   };
   reader.readAsArrayBuffer(file);
@@ -640,18 +761,18 @@ function mostrarSeletorAba() {
 function carregarAba() {
   const aba = document.getElementById('selAba').value;
   const r = processarAba(workbook.Sheets[aba]);
-  if (!r) { alert('Coluna OF não encontrada nesta aba.'); return; }
-  if (!r.length) { alert('Nenhuma OF encontrada nesta aba.'); return; }
+  if (!r)       { alert('Coluna OF não encontrada nesta aba.'); return; }
+  if (!r.length){ alert('Nenhuma OF encontrada nesta aba.'); return; }
   popularOrdens(r, aba);
 }
 
 function popularOrdens(lista, aba) {
   ordens = lista;
-  mostrarStatus('✓ ' + ordens.length + ' OF(s) carregadas · Aba: ' + aba, true);
+  mostrarStatus('✓ ' + ordens.length + ' OF(s) carregadas · Aba: ' + aba, 'ok');
   document.getElementById('btnTrocarAba').style.display = 'block';
-  document.getElementById('cardAba').style.display = 'none';
-  document.getElementById('cardOf').style.display = 'block';
-  document.getElementById('numPassoOf').textContent = '2';
+  document.getElementById('cardAba').style.display     = 'none';
+  document.getElementById('cardOf').style.display      = 'block';
+  document.getElementById('numPassoOf').textContent     = '2';
   document.getElementById('numPassoPalete').textContent = '3';
   preencherSelect(ordens);
 }
@@ -672,14 +793,14 @@ function filtrarOf() {
   const busca = document.getElementById('buscaOf').value.trim();
   if (!busca) { preencherSelect(ordens); return; }
 
+  const bNorm = norm(busca);
   const filtradas = ordens.filter(o =>
     o.of.includes(busca) ||
-    (o.cliente && o.cliente.toLowerCase().includes(busca.toLowerCase()))
+    norm(o.cliente).includes(bNorm)
   );
 
   preencherSelect(filtradas);
 
-  // Se só uma OF encontrada, seleciona automaticamente
   if (filtradas.length === 1) {
     document.getElementById('selOf').value = filtradas[0].of;
     selecionarOf();
@@ -710,25 +831,23 @@ function selecionarOf() {
   ofAtual = ordens.find(o => o.of === of);
   if (!ofAtual) return;
 
-  // Inicializar lista de paletes desta OF
   if (!paletes[of]) paletes[of] = [];
 
-  // Montar info da OF
   let html = '';
   if (ofAtual.cliente)
     html += '<div class="info-linha">Cliente: <strong>' + esc(ofAtual.cliente) + '</strong></div>';
   if (ofAtual.oc && ofAtual.oc !== '' && ofAtual.oc !== '0')
     html += '<div class="info-linha">OC: <strong>' + esc(ofAtual.oc) + '</strong></div>';
-  if (ofAtual.largura || ofAtual.comprimento)
-    html += '<div class="info-linha">Medida: <strong>' + esc(ofAtual.largura) + ' x ' + esc(ofAtual.comprimento) + '</strong></div>';
+  if (ofAtual.medida && ofAtual.medida !== '' && ofAtual.medida.toLowerCase() !== 'x')
+    html += '<div class="info-linha">Medida: <strong>' + esc(ofAtual.medida) + '</strong></div>';
   if (ofAtual.qtdePedido)
     html += '<div class="info-linha">Qtde do Pedido: <strong>' + fmt(ofAtual.qtdePedido) + ' chapas</strong></div>';
 
-  document.getElementById('infoOfBody').innerHTML = html || '<div class="info-linha" style="color:#999">Sem dados adicionais</div>';
-  document.getElementById('infoOf').style.display = 'block';
+  document.getElementById('infoOfBody').innerHTML =
+    html || '<div class="info-linha" style="color:#999">Sem dados adicionais</div>';
+  document.getElementById('infoOf').style.display    = 'block';
   document.getElementById('cardPalete').style.display = 'block';
 
-  // Limpar campos e focar no número do palete
   document.getElementById('numPalete').value = '';
   document.getElementById('qtdPalete').value = '';
   document.getElementById('msgPalete').style.display = 'none';
@@ -778,7 +897,6 @@ function salvarPalete() {
     return;
   }
 
-  // Verificar palete duplicado
   const listaOf = paletes[ofAtual.of];
   const idx = listaOf.findIndex(p => p.num === num);
   if (idx !== -1) {
@@ -794,16 +912,13 @@ function salvarPalete() {
   listaOf.push({ num, qtd });
   listaOf.sort((a, b) => a.num - b.num);
 
-  // Limpar campos e focar de volta no número
   document.getElementById('numPalete').value = '';
   document.getElementById('qtdPalete').value = '';
   document.getElementById('msgPalete').style.display = 'none';
 
   mostrarFlash('✓  Palete ' + String(num).padStart(2,'0') + '\n' + fmt(qtd) + ' chapas');
 
-  setTimeout(() => {
-    document.getElementById('numPalete').focus();
-  }, 80);
+  setTimeout(() => { document.getElementById('numPalete').focus(); }, 80);
 
   atualizarLista();
   atualizarCardGerar();
@@ -820,7 +935,6 @@ function atualizarLista() {
   const totalProd = lista.reduce((s, p) => s + p.qtd, 0);
   const qtdPedido = ofAtual.qtdePedido || 0;
 
-  // Barra de total
   const bar = document.getElementById('totalBar');
   document.getElementById('totalProd').textContent = fmt(totalProd);
 
@@ -831,7 +945,7 @@ function atualizarLista() {
     bar.className = 'total-bar';
     if (totalProd > qtdPedido) {
       bar.className = 'total-bar excedido';
-    } else if (qtdPedido > 0 && totalProd / qtdPedido >= 0.90) {
+    } else if (totalProd / qtdPedido >= 0.90) {
       bar.className = 'total-bar alerta';
     }
   } else {
@@ -839,7 +953,6 @@ function atualizarLista() {
     bar.className = 'total-bar';
   }
 
-  // Lista de itens
   const div = document.getElementById('listaPaletes');
   if (lista.length === 0) {
     div.innerHTML = '<div class="lista-vazia">Nenhum palete registrado ainda</div>';
@@ -870,11 +983,7 @@ function atualizarCardGerar() {
   const ofs = Object.keys(paletes).filter(k => paletes[k].length > 0);
   const cardGerar = document.getElementById('cardGerar');
 
-  if (ofs.length === 0) {
-    cardGerar.style.display = 'none';
-    return;
-  }
-
+  if (ofs.length === 0) { cardGerar.style.display = 'none'; return; }
   cardGerar.style.display = 'block';
 
   let html = '';
@@ -922,7 +1031,7 @@ function gerarExcel() {
     ['ROMANEIO DE EXPEDIÇÃO - PRIME ONDULADOS'],
     ['Gerado em: ' + new Date().toLocaleString('pt-BR')],
     [],
-    ['Cliente', 'OF', 'Ordem de Compra (OC)', 'Largura', 'Comprimento', 'Nº Palete', 'Qtde Palete (chapas)', 'Qtde Pedido (chapas)']
+    ['Cliente', 'OF', 'Ordem de Compra (OC)', 'Medida (Sliter)', 'Nº Palete', 'Qtde Palete (chapas)', 'Qtde Pedido (chapas)']
   ];
 
   ofs.forEach(ofNum => {
@@ -930,11 +1039,10 @@ function gerarExcel() {
     const lista = paletes[ofNum];
     lista.forEach(p => {
       romData.push([
-        ord ? ord.cliente      : '',
+        ord ? ord.cliente    : '',
         ofNum,
-        ord ? ord.oc           : '',
-        ord ? ord.largura      : '',
-        ord ? ord.comprimento  : '',
+        ord ? ord.oc         : '',
+        ord ? ord.medida     : '',
         p.num,
         p.qtd,
         ord && ord.qtdePedido ? ord.qtdePedido : ''
@@ -944,14 +1052,8 @@ function gerarExcel() {
 
   const wsRom = XLSX.utils.aoa_to_sheet(romData);
   wsRom['!cols'] = [
-    { wch: 32 }, // Cliente
-    { wch: 12 }, // OF
-    { wch: 22 }, // OC
-    { wch: 12 }, // Largura
-    { wch: 16 }, // Comprimento
-    { wch: 12 }, // Nº Palete
-    { wch: 24 }, // Qtde Palete
-    { wch: 24 }, // Qtde Pedido
+    { wch: 32 }, { wch: 12 }, { wch: 22 },
+    { wch: 20 }, { wch: 12 }, { wch: 24 }, { wch: 24 }
   ];
   XLSX.utils.book_append_sheet(wb, wsRom, 'Romaneio');
 
@@ -980,27 +1082,21 @@ function gerarExcel() {
 
   const wsRes = XLSX.utils.aoa_to_sheet(resData);
   wsRes['!cols'] = [
-    { wch: 12 }, // OF
-    { wch: 32 }, // Cliente
-    { wch: 22 }, // OC
-    { wch: 16 }, // Qtde Pedido
-    { wch: 18 }, // Total Produzido
-    { wch: 12 }, // Saldo
-    { wch: 14 }, // Nº Paletes
+    { wch: 12 }, { wch: 32 }, { wch: 22 },
+    { wch: 16 }, { wch: 18 }, { wch: 12 }, { wch: 14 }
   ];
   XLSX.utils.book_append_sheet(wb, wsRes, 'Resumo');
 
-  // Nome do arquivo
   const data  = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
   const ofStr = ofs.length === 1 ? '_OF' + ofs[0] : '_' + ofs.length + 'OFs';
   XLSX.writeFile(wb, 'Romaneio_Prime' + ofStr + '_' + data + '.xlsx');
 }
 
 // ========== FEEDBACKS ==========
-function mostrarStatus(txt, ok) {
+function mostrarStatus(txt, tipo) {
   const el = document.getElementById('statusArquivo');
   el.textContent = txt;
-  el.className = 'arq-status ' + (ok ? 'ok' : 'err');
+  el.className = 'arq-status ' + tipo;
   el.style.display = 'block';
 }
 
