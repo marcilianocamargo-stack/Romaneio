@@ -362,6 +362,7 @@ input.inp-grande {
       <input type="text" id="buscaOf" placeholder="Ex: 123456" inputmode="numeric" autocomplete="off" oninput="filtrarOf()">
       <button class="btn-x" onclick="limparBusca()">✕</button>
     </div>
+    <div class="msg err" id="alertaOf" style="display:none"></div>
     <label class="lbl">Ou selecione na lista:</label>
     <select id="selOf" onchange="selecionarOf()">
       <option value="">— toque para escolher a OF —</option>
@@ -630,6 +631,7 @@ function selecionarCliente() {
   // Limpa qualquer seleção de OF anterior
   ofAtual = null;
   document.getElementById('buscaOf').value = '';
+  document.getElementById('alertaOf').style.display = 'none';
   document.getElementById('selOf').value   = '';
   document.getElementById('infoOf').style.display    = 'none';
   document.getElementById('cardOf').style.display     = 'none';
@@ -658,18 +660,37 @@ function preencherSelect(lista) {
 
 function filtrarOf() {
   const busca = document.getElementById('buscaOf').value.trim();
-  if (!busca) { preencherSelect(ordens); return; }
+  const alerta = document.getElementById('alertaOf');
+  if (!busca) { alerta.style.display = 'none'; preencherSelect(ordens); return; }
+
   const bNorm = norm(busca);
   const filtradas = ordens.filter(o => o.of.includes(busca) || norm(o.cliente).includes(bNorm));
   preencherSelect(filtradas);
-  if (filtradas.length === 1) {
-    document.getElementById('selOf').value = filtradas[0].of;
+
+  // Só auto-seleciona quando o número digitado é EXATAMENTE o de uma OF.
+  // (antes auto-selecionava com 1 resultado parcial e pulava pra OF errada)
+  const exata = ordens.find(o => o.of === busca);
+  if (exata) {
+    alerta.style.display = 'none';
+    document.getElementById('selOf').value = exata.of;
     selecionarOf();
+    return;
+  }
+
+  // Digitou um número que não existe em nenhuma OF deste cliente → alerta
+  if (filtradas.length === 0) {
+    alerta.textContent = '⚠ Nenhuma OF com esse número neste cliente. Confira o número.';
+    alerta.style.display = 'block';
+    document.getElementById('infoOf').style.display = 'none';
+    document.getElementById('cardPalete').style.display = 'none';
+  } else {
+    alerta.style.display = 'none';
   }
 }
 
 function limparBusca() {
   document.getElementById('buscaOf').value = '';
+  document.getElementById('alertaOf').style.display = 'none';
   document.getElementById('selOf').value = '';
   document.getElementById('infoOf').style.display = 'none';
   document.getElementById('cardPalete').style.display = 'none';
@@ -682,6 +703,7 @@ function limparBusca() {
 // ========== SELECIONAR OF ==========
 function selecionarOf() {
   const of = document.getElementById('selOf').value;
+  document.getElementById('alertaOf').style.display = 'none';
   if (!of) {
     document.getElementById('infoOf').style.display = 'none';
     document.getElementById('cardPalete').style.display = 'none';
@@ -827,6 +849,7 @@ function atualizarCardGerar() {
 function novaOf() {
   ofAtual = null;
   document.getElementById('buscaOf').value = '';
+  document.getElementById('alertaOf').style.display = 'none';
   document.getElementById('selOf').value = '';
   document.getElementById('infoOf').style.display = 'none';
   document.getElementById('cardPalete').style.display = 'none';
