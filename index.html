@@ -342,19 +342,17 @@ input.inp-grande {
     </div>
   </div>
 
-  <div class="card" id="cardArquivo">
-    <div class="step-title"><span class="step-num">1</span>Carregar Programação</div>
-    <label class="lbl">Selecione o arquivo Excel (xlsx)</label>
-    <input type="file" id="fileXlsx" accept=".xlsx,.xls">
-    <div class="arq-status" id="statusArquivo"></div>
-    <button class="btn btn-outline" id="btnTrocarAba" style="display:none" onclick="mostrarSeletorAba()">↕&nbsp;&nbsp;Trocar aba</button>
+  <div class="card" id="cardAuto" style="display:none">
+    <div class="arq-status info" id="statusAuto" style="display:block;margin-top:0">⏳ Buscando a programação do dia...</div>
+    <button class="btn" id="btnRecarregar" style="display:none" onclick="autoCarregar()">↻&nbsp;&nbsp;Tentar novamente</button>
   </div>
 
-  <div class="card" id="cardAba" style="display:none">
-    <div class="step-title"><span class="step-num">2</span>Selecionar Data / Aba</div>
-    <label class="lbl">Qual aba tem as OFs?</label>
-    <select id="selAba"></select>
-    <button class="btn" onclick="carregarAba()">Carregar esta aba</button>
+  <div class="card" id="cardCliente" style="display:none">
+    <div class="step-title"><span class="step-num">1</span>Cliente</div>
+    <label class="lbl">Escolha o cliente:</label>
+    <select id="selCliente" onchange="selecionarCliente()">
+      <option value="">— toque para escolher o cliente —</option>
+    </select>
   </div>
 
   <div class="card" id="cardOf" style="display:none">
@@ -431,7 +429,9 @@ if ('serviceWorker' in navigator) {
 
 // ========== ESTADO ==========
 let workbook = null;
-let ordens   = [];
+let clientesData = {};        // { nomeDaAba(cliente): [ordens...] }
+let mapaOrdens   = new Map();  // of -> ordem (todos os clientes) p/ o romaneio final
+let ordens   = [];             // ordens do cliente selecionado
 let ofAtual  = null;
 let paletes  = {};
 
@@ -543,68 +543,93 @@ function processarAba(ws) {
   return [...mapa.values()];
 }
 
-// ========== CARREGAR ARQUIVO ==========
-document.getElementById('fileXlsx').addEventListener('change', function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  mostrarStatus('Lendo arquivo...', 'info');
+// ========== CARREGAR WORKBOOK (comum ao auto e ao manual) ==========
+// Cada aba do Excel = 1 cliente. Guarda as OFs de cada cliente e monta a lista.
+function carregarWorkbook(buf) {
+  workbook = XLSX.read(buf, { type: 'array', cellDates: true });
+  clientesData = {};
+  mapaOrdens = new Map();
 
-  const reader = new FileReader();
-  reader.onload = function(ev) {
-    try {
-      workbook = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
-      const abas = workbook.SheetNames;
-      const selAba = document.getElementById('selAba');
-      selAba.innerHTML = '';
-      abas.forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = opt.textContent = a;
-        selAba.appendChild(opt);
-      });
-
-      // Escolhe a aba com mais OFs
-      let melhorAba = null, melhorQtd = 0, melhorOrdens = null;
-      for (const aba of abas) {
-        const r = processarAba(workbook.Sheets[aba]);
-        if (r && r.length > melhorQtd) { melhorQtd = r.length; melhorAba = aba; melhorOrdens = r; }
-      }
-
-      if (melhorAba) {
-        selAba.value = melhorAba;
-        popularOrdens(melhorOrdens, melhorAba);
-      } else {
-        document.getElementById('cardAba').style.display = 'block';
-        mostrarStatus('Não foi possível detectar OFs. Selecione a aba correta.', 'err');
-      }
-    } catch (err) {
-      mostrarStatus('Erro ao ler o arquivo: ' + err.message, 'err');
+  for (const aba of workbook.SheetNames) {
+    const r = processarAba(workbook.Sheets[aba]);
+    if (r && r.length) {
+      clientesData[aba] = r;
+      r.forEach(o => { if (!mapaOrdens.has(o.of)) mapaOrdens.set(o.of, o); });
     }
-  };
-  reader.readAsArrayBuffer(file);
-});
+  }
 
-function mostrarSeletorAba() {
-  document.getElementById('cardAba').style.display = 'block';
-  setTimeout(() => document.getElementById('cardAba').scrollIntoView({ behavior:'smooth', block:'nearest' }), 50);
+  const clientes = Object.keys(clientesData);
+  if (!clientes.length) return false;
+
+  const sel = document.getElementById('selCliente');
+  sel.innerHTML = '<option value="">— toque para escolher o cliente —</option>';
+  clientes.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c + '  ·  ' + clientesData[c].length + ' OF(s)';
+    sel.appendChild(opt);
+  });
+  document.getElementById('cardCliente').style.display = 'block';
+
+  // Se o arquivo tem só 1 cliente, já seleciona automaticamente
+  if (clientes.length === 1) { sel.value = clientes[0]; selecionarCliente(); }
+  return true;
 }
 
-function carregarAba() {
-  const aba = document.getElementById('selAba').value;
-  const r = processarAba(workbook.Sheets[aba]);
-  if (!r)        { alert('Coluna OF não encontrada nesta aba.'); return; }
-  if (!r.length) { alert('Nenhuma OF encontrada nesta aba.'); return; }
-  popularOrdens(r, aba);
+// ========== AUTO-CARREGAR DO GITHUB ==========
+// Busca a programação que VOCÊ publicou (programacao-hoje.xlsx). Cache-busting
+// (?t=) + no-store para nunca pegar versão antiga em cache. NÃO existe upload
+// manual: o operador nunca tem o arquivo. Se falhar, mostra aviso + "Tentar novamente".
+async function autoCarregar() {
+  const statusAuto    = document.getElementById('statusAuto');
+  const btnRecarregar = document.getElementById('btnRecarregar');
+  document.getElementById('cardAuto').style.display = 'block';
+  btnRecarregar.style.display = 'none';
+  statusAuto.className = 'arq-status info';
+  statusAuto.style.display = 'block';
+  statusAuto.textContent = '⏳ Buscando a programação do dia...';
+
+  try {
+    const resp = await fetch('./programacao-hoje.xlsx?t=' + Date.now(), { cache: 'no-store' });
+    if (!resp.ok) throw new Error('sem arquivo');
+    const buf = await resp.arrayBuffer();
+    if (!carregarWorkbook(buf)) throw new Error('sem OFs');
+
+    let quando = '';
+    const lm = resp.headers.get('last-modified');
+    if (lm) {
+      const d = new Date(lm);
+      if (!isNaN(d.getTime()))
+        quando = ' · atualizada ' + d.toLocaleDateString('pt-BR') + ' ' +
+                 d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+    statusAuto.className = 'arq-status ok';
+    statusAuto.textContent = '✓ Programação do dia carregada' + quando;
+  } catch (err) {
+    statusAuto.className = 'arq-status err';
+    statusAuto.textContent = '⚠ Nenhuma programação disponível ainda. Aguarde a publicação do dia e toque em "Tentar novamente".';
+    btnRecarregar.style.display = 'block';
+  }
 }
 
-function popularOrdens(lista, aba) {
-  ordens = lista;
-  mostrarStatus('✓ ' + ordens.length + ' OF(s) carregadas · Aba: ' + aba, 'ok');
-  document.getElementById('btnTrocarAba').style.display = 'block';
-  document.getElementById('cardAba').style.display      = 'none';
-  document.getElementById('cardOf').style.display       = 'block';
-  document.getElementById('numPassoOf').textContent      = '2';
-  document.getElementById('numPassoPalete').textContent  = '3';
+// ========== SELECIONAR CLIENTE (carrega as OFs automaticamente) ==========
+function selecionarCliente() {
+  const aba = document.getElementById('selCliente').value;
+  // Limpa qualquer seleção de OF anterior
+  ofAtual = null;
+  document.getElementById('buscaOf').value = '';
+  document.getElementById('selOf').value   = '';
+  document.getElementById('infoOf').style.display    = 'none';
+  document.getElementById('cardOf').style.display     = 'none';
+  document.getElementById('cardPalete').style.display = 'none';
+  document.getElementById('cardLista').style.display  = 'none';
+
+  if (!aba) return;
+
+  ordens = clientesData[aba] || [];
   preencherSelect(ordens);
+  document.getElementById('cardOf').style.display = 'block';
+  setTimeout(() => document.getElementById('cardOf').scrollIntoView({ behavior:'smooth', block:'start' }), 60);
 }
 
 // ========== SELECT DE OF ==========
@@ -776,7 +801,7 @@ function atualizarCardGerar() {
   cardGerar.style.display = 'block';
 
   document.getElementById('resumoGeral').innerHTML = ofs.map(ofNum => {
-    const ord = ordens.find(o => o.of === ofNum);
+    const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
     const lista = paletes[ofNum];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const ped = ord ? ord.qtdePedido : 0;
@@ -812,7 +837,7 @@ function gerarExcel() {
     ['Cliente','OF','Ordem de Compra (OC)','Medida (Sliter)','Nº Palete','Qtde Palete (chapas)','Qtde Pedido (chapas)']
   ];
   ofs.forEach(ofNum => {
-    const ord = ordens.find(o => o.of === ofNum);
+    const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
     paletes[ofNum].forEach(p => romData.push([
       ord ? ord.cliente : '', ofNum, ord ? ord.oc : '', ord ? ord.medida : '',
       p.num, p.qtd, ord && ord.qtdePedido ? ord.qtdePedido : ''
@@ -827,7 +852,7 @@ function gerarExcel() {
     ['OF','Cliente','Ordem de Compra (OC)','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
   ];
   ofs.forEach(ofNum => {
-    const ord = ordens.find(o => o.of === ofNum);
+    const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
     const lista = paletes[ofNum];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const ped = ord ? ord.qtdePedido : 0;
@@ -843,12 +868,6 @@ function gerarExcel() {
 }
 
 // ========== FEEDBACKS ==========
-function mostrarStatus(txt, tipo) {
-  const el = document.getElementById('statusArquivo');
-  el.textContent = txt;
-  el.className = 'arq-status ' + tipo;
-  el.style.display = 'block';
-}
 function mostrarMsgPalete(txt, tipo) {
   const el = document.getElementById('msgPalete');
   el.textContent = txt;
@@ -866,6 +885,9 @@ function mostrarFlash(txt) {
   clearTimeout(overlay._t);
   overlay._t = setTimeout(() => overlay.classList.remove('show'), 1400);
 }
+
+// ========== INICIALIZAÇÃO ==========
+autoCarregar();
 </script>
 </body>
 </html>
