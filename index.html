@@ -506,6 +506,7 @@ function processarAba(ws) {
   const colMed = findCol(headers, ['sliter vincadeira','sliter','vincadeira','medida','formato']);
   const colLarg = findCol(headers, ['largura','larg']);
   const colComp = findCol(headers, ['comprimento','comp','facao']);
+  const colPap  = findCol(headers, ['tipo de papel','tipo papel','papelao','papel','p.o','p.o.','estrutura','onda']);
 
   // Fallback: encontra coluna com mais valores > 100000 se não achou "OF"
   let colOfFinal = colOf;
@@ -538,6 +539,7 @@ function processarAba(ws) {
         cliente:     colCli >= 0 ? String(r[colCli]).trim() : '',
         oc:          colOC  >= 0 ? String(r[colOC]).trim()  : '',
         qtdePedido:  colQtd >= 0 ? (parseFloat(String(r[colQtd]).replace(',','.')) || 0) : 0,
+        tipoPapel:   colPap >= 0 ? String(r[colPap]).trim() : '',
         medida,        // sliter (tela)
         largura,       // chapa
         comprimento,   // chapa
@@ -838,6 +840,13 @@ function novaOf() {
 function gerarExcel() {
   const ofs = Object.keys(paletes).filter(k => paletes[k].length > 0);
   if (ofs.length === 0) return;
+  // Mostra o aviso ANTES de gerar (writeFile é síncrono e trava a tela por instantes).
+  // O setTimeout deixa a tela pintar a mensagem antes de começar a gerar/baixar.
+  mostrarFlash('⬇  Gerando e baixando\no romaneio em Excel...');
+  setTimeout(() => _gerarEBaixarExcel(ofs), 80);
+}
+
+function _gerarEBaixarExcel(ofs) {
   const wb = XLSX.utils.book_new();
 
   const romData = [
@@ -859,7 +868,7 @@ function gerarExcel() {
 
   const resData = [
     ['RESUMO POR ORDEM DE FABRICAÇÃO'], [],
-    ['OF','Cliente','Largura','Comprimento','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
+    ['OF','Cliente','Tipo de Papel','Medida (L × C)','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
   ];
   ofs.forEach(ofNum => {
     const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
@@ -869,8 +878,8 @@ function gerarExcel() {
     resData.push([
       ofNum,
       ord ? ord.cliente : '',
-      ord ? ord.largura : '',
-      ord ? ord.comprimento : '',
+      ord ? ord.tipoPapel : '',
+      ord ? ord.medidaChapa : '',
       ped || '',
       total,
       ped ? (ped - total) : '',
@@ -878,12 +887,13 @@ function gerarExcel() {
     ]);
   });
   const wsRes = XLSX.utils.aoa_to_sheet(resData);
-  wsRes['!cols'] = [{wch:9},{wch:20},{wch:9},{wch:12},{wch:11},{wch:14},{wch:9},{wch:12}];
+  wsRes['!cols'] = [{wch:9},{wch:20},{wch:16},{wch:14},{wch:11},{wch:14},{wch:9},{wch:12}];
   XLSX.utils.book_append_sheet(wb, wsRes, 'Resumo');
 
   const data = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
   const ofStr = ofs.length === 1 ? '_OF'+ofs[0] : '_'+ofs.length+'OFs';
   XLSX.writeFile(wb, 'Romaneio_Prime'+ofStr+'_'+data+'.xlsx');
+  mostrarFlash('✓  Romaneio baixado!');
 }
 
 // ========== FEEDBACKS ==========
