@@ -1,0 +1,45 @@
+name: Vigia do deploy (Pages)
+
+# Confere se o site publicou a versão mais nova do repositório.
+# Se não publicou, pede um build direto à API do Pages (o "empurrão")
+# e tenta de novo, até 6 vezes. Roda a cada push e a cada 30 min.
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  pages: write
+  contents: read
+
+concurrency:
+  group: vigia-deploy
+  cancel-in-progress: true
+
+jobs:
+  vigiar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir site e destravar se preciso
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SITE="https://marcilianocamargo-stack.github.io/Romaneio"
+          FILE="programacao-hoje.xlsx"
+          REPO_SIZE=$(stat -c%s "$FILE" 2>/dev/null || echo 0)
+          [ "$REPO_SIZE" = "0" ] && { echo "Sem $FILE no repo — nada a vigiar."; exit 0; }
+          sleep 45   # dá tempo do deploy normal terminar antes de conferir
+          for i in 1 2 3 4 5 6; do
+            LIVE=$(curl -sI "$SITE/$FILE?t=$(date +%s%N)" | tr -d '\r' | awk 'tolower($1)=="content-length:"{print $2}')
+            echo "tentativa $i: repo=$REPO_SIZE | ao vivo=$LIVE"
+            if [ "$LIVE" = "$REPO_SIZE" ]; then echo "✓ Site atualizado."; exit 0; fi
+            echo "Desatualizado — pedindo build direto ao Pages..."
+            gh api -X POST "repos/${{ github.repository }}/pages/builds" || true
+            sleep 75
+          done
+          echo "::warning::Site ainda desatualizado após 6 tentativas (instabilidade do GitHub Pages)."
+          exit 1
