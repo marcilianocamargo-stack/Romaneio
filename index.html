@@ -789,7 +789,7 @@ function selecionarOf() {
   let html = '';
   if (ofAtual.cliente) html += '<div class="info-linha">Cliente: <strong>' + esc(ofAtual.cliente) + '</strong></div>';
   if (ofAtual.oc && ofAtual.oc !== '' && ofAtual.oc !== '0') html += '<div class="info-linha">OC: <strong>' + esc(ofAtual.oc) + '</strong></div>';
-  if (ofAtual.medida && norm(ofAtual.medida) !== 'x') html += '<div class="info-linha">Medida: <strong>' + esc(ofAtual.medida) + '</strong></div>';
+  if (ofAtual.medidaChapa) html += '<div class="info-linha">Medida (Largura x Comprimento): <strong>' + esc(ofAtual.medidaChapa) + '</strong></div>';
   if (ofAtual.qtdePedido) html += '<div class="info-linha">Qtde do Pedido: <strong>' + fmt(ofAtual.qtdePedido) + ' chapas</strong></div>';
 
   document.getElementById('infoOfBody').innerHTML = html || '<div class="info-linha" style="color:#999">Sem dados adicionais</div>';
