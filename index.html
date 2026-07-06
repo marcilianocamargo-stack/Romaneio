@@ -311,6 +311,13 @@ input.inp-grande {
 .of-chip.azul     .of-chip-top, .of-chip.azul     .of-chip-qtd { color: #1565c0; }
 .of-chip.azul     .dot, .of-chip.azul     .of-chip-fill { background: #1565c0; }
 .of-chip.selecionado { box-shadow: 0 0 0 3px rgba(26,86,160,.28); }
+.of-chip.expandido {
+  flex: 1 1 100%;
+  max-width: 100%;
+  cursor: pointer;
+}
+.of-chip-paletes { margin-top: 10px; cursor: default; }
+.of-chip-paletes .palete-item:last-child { margin-bottom: 0; }
 
 .resumo-item {
   background: #f0f6ff;
@@ -462,13 +469,13 @@ input.inp-grande {
     <button class="btn btn-outline" id="btnBuscaPaletes" style="margin-top:0" onclick="toggleBuscaPaletesVisivel()">🔍&nbsp;&nbsp;Consultar / Excluir Paletes</button>
     <div id="buscaPaletesConteudo" style="display:none;margin-top:16px">
       <div class="ofs-pedido-wrap" id="buscaPaletesWrap"></div>
-      <div id="buscaPaletesDetalhe"></div>
     </div>
   </div>
 
   <div class="card" id="cardGerar" style="display:none">
     <div class="step-title"><span class="step-num">✓</span>Gerar Romaneio</div>
-    <div id="resumoGeral"></div>
+    <button class="btn btn-outline" id="btnResumoGerar" style="margin-top:0" onclick="toggleResumoGerarVisivel()">📋&nbsp;&nbsp;Ver resumo dos paletes</button>
+    <div id="resumoGeral" style="display:none;margin-top:14px"></div>
     <button class="btn btn-laranja" onclick="gerarExcel()">⬇&nbsp;&nbsp;BAIXAR EXCEL (ROMANEIO)</button>
     <button class="btn btn-cinza" onclick="novaOf()">+&nbsp;&nbsp;Registrar outra OF</button>
     <button class="btn btn-outline" style="border-color:#c62828;color:#c62828" onclick="apagarDadosSalvos()">🗑&nbsp;&nbsp;Apagar dados (só depois de conferir o Excel)</button>
@@ -957,7 +964,6 @@ function atualizarBuscaPaletes() {
   const btn  = document.getElementById('btnBuscaPaletes');
   const conteudo = document.getElementById('buscaPaletesConteudo');
   const wrap = document.getElementById('buscaPaletesWrap');
-  const det  = document.getElementById('buscaPaletesDetalhe');
   const ofs  = Object.keys(paletes).filter(k => paletes[k].length > 0);
 
   if (ofs.length === 0) {
@@ -974,36 +980,45 @@ function atualizarBuscaPaletes() {
 
   if (ofBuscaAberta && !ofs.includes(ofBuscaAberta)) { ofBuscaAberta = null; paleteBuscaAberto = null; }
 
+  // Cada chip mostra seu resumo normalmente; a OF aberta expande e mostra os
+  // paletes DENTRO do próprio chip (não numa área separada embaixo da grade).
   wrap.innerHTML = ofs.map(ofNum => {
     const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
     const lista = paletes[ofNum] || [];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const pedido = ord ? (ord.qtdePedido || 0) : 0;
     const st = statusPedido(total, pedido) || 'verde';
-    const sel = ofBuscaAberta === ofNum ? ' selecionado' : '';
+    const aberta = ofBuscaAberta === ofNum;
     const pct = pedido > 0 ? Math.min(100, (total / pedido) * 100) : 0;
     const desc = ord && ord.cliente ? ord.cliente : '';
-    return '<div class="of-chip ' + st + sel + '" onclick="toggleBuscaOf(\'' + ofNum + '\')">'
-         + '<div class="of-chip-top"><span class="dot"></span>OF ' + esc(ofNum) + '</div>'
+
+    const corpo = '<div class="of-chip-top"><span class="dot"></span>OF ' + esc(ofNum) + '</div>'
          + (desc ? '<div class="of-chip-desc">' + esc(desc) + '</div>' : '')
          + '<div class="of-chip-bar"><div class="of-chip-fill" style="width:' + pct + '%"></div></div>'
-         + '<div class="of-chip-qtd">' + fmt(total) + ' / ' + fmt(pedido) + '</div>'
-         + '</div>';
-  }).join('');
+         + '<div class="of-chip-qtd">' + fmt(total) + ' / ' + fmt(pedido) + '</div>';
 
-  if (!ofBuscaAberta) { det.innerHTML = ''; return; }
+    if (!aberta) {
+      return '<div class="of-chip ' + st + '" onclick="toggleBuscaOf(\'' + ofNum + '\')">' + corpo + '</div>';
+    }
 
-  const lista = paletes[ofBuscaAberta] || [];
-  det.innerHTML = '<div class="lista-tit" style="margin-top:16px">Paletes da OF ' + esc(ofBuscaAberta) + '</div>'
-    + (lista.length === 0
+    const paletesHtml = lista.length === 0
       ? '<div class="lista-vazia">Nenhum palete nesta OF</div>'
       : lista.map(p => {
-          const aberto = paleteBuscaAberto && paleteBuscaAberto.of === ofBuscaAberta && paleteBuscaAberto.num === p.num;
-          return '<div class="palete-item' + (aberto ? ' aberto' : '') + '" onclick="togglePaleteBusca(\'' + ofBuscaAberta + '\', ' + p.num + ')">'
+          const pAberto = paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.num === p.num;
+          return '<div class="palete-item' + (pAberto ? ' aberto' : '') + '" onclick="togglePaleteBusca(\'' + ofNum + '\', ' + p.num + ')">'
                + '<div><div class="pi-num">Palete ' + String(p.num).padStart(2, '0') + '</div><div class="pi-qtd">' + fmt(p.qtd) + ' chapas</div></div>'
-               + (aberto ? '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + ofBuscaAberta + '\', ' + p.num + ')">✕&nbsp;&nbsp;Excluir este palete</button>' : '')
+               + (pAberto ? '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + ofNum + '\', ' + p.num + ')">✕&nbsp;&nbsp;Excluir este palete</button>' : '')
                + '</div>';
-        }).join(''));
+        }).join('');
+
+    return '<div class="of-chip ' + st + ' selecionado expandido" onclick="toggleBuscaOf(\'' + ofNum + '\')">'
+         + corpo
+         + '<div class="of-chip-paletes" onclick="event.stopPropagation()">'
+         + '<div class="lista-tit" style="margin-top:12px">Paletes desta OF</div>'
+         + paletesHtml
+         + '</div>'
+         + '</div>';
+  }).join('');
 }
 
 function toggleBuscaOf(ofNum) {
@@ -1029,13 +1044,27 @@ function removerPaleteBusca(ofNum, num) {
 }
 
 // ========== CARD GERAR ==========
+// O resumo (paletes por OF) fica OCULTO por padrão atrás de um botão, pra não
+// confundir o operador com dados que ele não precisa ver pra baixar o Excel.
+let resumoGerarVisivel = false;
+
+function toggleResumoGerarVisivel() {
+  resumoGerarVisivel = !resumoGerarVisivel;
+  atualizarCardGerar();
+}
+
 function atualizarCardGerar() {
   const ofs = Object.keys(paletes).filter(k => paletes[k].length > 0);
   const cardGerar = document.getElementById('cardGerar');
-  if (ofs.length === 0) { cardGerar.style.display = 'none'; return; }
+  const resumoDiv = document.getElementById('resumoGeral');
+  const btn = document.getElementById('btnResumoGerar');
+  if (ofs.length === 0) { cardGerar.style.display = 'none'; resumoGerarVisivel = false; return; }
   cardGerar.style.display = 'block';
+  resumoDiv.style.display = resumoGerarVisivel ? 'block' : 'none';
+  btn.textContent = resumoGerarVisivel ? '🔼  Ocultar resumo dos paletes' : '📋  Ver resumo dos paletes';
+  if (!resumoGerarVisivel) return;
 
-  document.getElementById('resumoGeral').innerHTML = ofs.map(ofNum => {
+  resumoDiv.innerHTML = ofs.map(ofNum => {
     const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
     const lista = paletes[ofNum];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
