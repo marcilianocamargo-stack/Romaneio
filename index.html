@@ -459,9 +459,11 @@ input.inp-grande {
   </div>
 
   <div class="card" id="cardBuscaPaletes" style="display:none">
-    <div class="step-title" style="margin-bottom:14px">🔍&nbsp;&nbsp;Consultar / Excluir Paletes</div>
-    <div class="ofs-pedido-wrap" id="buscaPaletesWrap"></div>
-    <div id="buscaPaletesDetalhe"></div>
+    <button class="btn btn-outline" id="btnBuscaPaletes" style="margin-top:0" onclick="toggleBuscaPaletesVisivel()">🔍&nbsp;&nbsp;Consultar / Excluir Paletes</button>
+    <div id="buscaPaletesConteudo" style="display:none;margin-top:16px">
+      <div class="ofs-pedido-wrap" id="buscaPaletesWrap"></div>
+      <div id="buscaPaletesDetalhe"></div>
+    </div>
   </div>
 
   <div class="card" id="cardGerar" style="display:none">
@@ -937,24 +939,38 @@ function atualizarOfsPedido() {
 }
 
 // ========== CONSULTAR / EXCLUIR PALETES (chips, qualquer OF/cliente já lançado) ==========
-// Seção separada só pra achar e corrigir um lançamento errado: toca no chip da OF
-// pra ver os paletes dela, toca no palete pra revelar o botão de excluir.
-let ofBuscaAberta   = null;   // OF atualmente expandida nesta seção
-let paleteBuscaAberto = null; // { of, num } com o botão excluir revelado
+// Fica OCULTA por padrão pra não confundir o operador — só aparece atrás de um
+// botão. Ao abrir: toca no chip da OF pra ver os paletes dela, toca no palete
+// pra revelar o botão de excluir.
+let buscaPaletesVisivel = false; // conteúdo (chips + paletes) só some/aparece nesse botão
+let ofBuscaAberta   = null;      // OF atualmente expandida nesta seção
+let paleteBuscaAberto = null;    // { of, num } com o botão excluir revelado
+
+function toggleBuscaPaletesVisivel() {
+  buscaPaletesVisivel = !buscaPaletesVisivel;
+  if (!buscaPaletesVisivel) { ofBuscaAberta = null; paleteBuscaAberto = null; }
+  atualizarBuscaPaletes();
+}
 
 function atualizarBuscaPaletes() {
   const card = document.getElementById('cardBuscaPaletes');
+  const btn  = document.getElementById('btnBuscaPaletes');
+  const conteudo = document.getElementById('buscaPaletesConteudo');
   const wrap = document.getElementById('buscaPaletesWrap');
   const det  = document.getElementById('buscaPaletesDetalhe');
   const ofs  = Object.keys(paletes).filter(k => paletes[k].length > 0);
 
   if (ofs.length === 0) {
     card.style.display = 'none';
+    buscaPaletesVisivel = false;
     ofBuscaAberta = null;
     paleteBuscaAberto = null;
     return;
   }
   card.style.display = 'block';
+  conteudo.style.display = buscaPaletesVisivel ? 'block' : 'none';
+  btn.textContent = buscaPaletesVisivel ? '🔼  Ocultar consulta de paletes' : '🔍  Consultar / Excluir Paletes';
+  if (!buscaPaletesVisivel) return;
 
   if (ofBuscaAberta && !ofs.includes(ofBuscaAberta)) { ofBuscaAberta = null; paleteBuscaAberto = null; }
 
