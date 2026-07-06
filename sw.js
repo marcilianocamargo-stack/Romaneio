@@ -1,4 +1,4 @@
-const CACHE = 'romaneio-v3';
+const CACHE = 'romaneio-v4';
 const ASSETS = [
   './index.html',
   './manifest-romaneio.json',

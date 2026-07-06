@@ -261,6 +261,45 @@ input.inp-grande {
 .total-bar.alerta   .t-lbl, .total-bar.alerta   .t-num { color: #f57f17; }
 .total-bar.excedido { background: #fdecea; border-color: #e53935; }
 .total-bar.excedido .t-lbl, .total-bar.excedido .t-num { color: #c62828; }
+.total-bar.exato    { background: #e3f2fd; border-color: #1565c0; }
+.total-bar.exato    .t-lbl, .total-bar.exato    .t-num { color: #1565c0; }
+
+.ofs-pedido-tit {
+  font-size: 13px;
+  font-weight: 800;
+  color: #8a9bb0;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 10px;
+}
+.ofs-pedido-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+.of-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 13px;
+  border-radius: 20px;
+  border: 2px solid #ccc;
+  background: #f5f5f5;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #555;
+  cursor: pointer;
+  line-height: 1.25;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .1s;
+}
+.of-chip:active { transform: scale(.95); }
+.of-chip .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: #999; }
+.of-chip.verde    { border-color: #4caf50; background: #eef8ef; color: #2e7d32; }
+.of-chip.verde    .dot { background: #4caf50; }
+.of-chip.amarelo  { border-color: #f9a825; background: #fffaf0; color: #a15c00; }
+.of-chip.amarelo  .dot { background: #f9a825; }
+.of-chip.vermelho { border-color: #e53935; background: #fdeeee; color: #c62828; }
+.of-chip.vermelho .dot { background: #e53935; }
+.of-chip.azul     { border-color: #1565c0; background: #eef5fd; color: #1565c0; }
+.of-chip.azul     .dot { background: #1565c0; }
+.of-chip.selecionado { box-shadow: 0 0 0 3px rgba(26,86,160,.28); }
 
 .resumo-item {
   background: #f0f6ff;
@@ -389,6 +428,11 @@ input.inp-grande {
     <div class="msg" id="msgPalete"></div>
   </div>
 
+  <div class="card" id="cardOfsPedido" style="display:none">
+    <div class="ofs-pedido-tit">OFs do pedido · toque para trocar rápido</div>
+    <div class="ofs-pedido-wrap" id="ofsPedidoWrap"></div>
+  </div>
+
   <div class="card" id="cardLista" style="display:none">
     <div class="step-title" style="margin-bottom:14px">Paletes Registrados</div>
     <div class="total-bar" id="totalBar">
@@ -410,6 +454,7 @@ input.inp-grande {
     <div id="resumoGeral"></div>
     <button class="btn btn-laranja" onclick="gerarExcel()">⬇&nbsp;&nbsp;BAIXAR EXCEL (ROMANEIO)</button>
     <button class="btn btn-cinza" onclick="novaOf()">+&nbsp;&nbsp;Registrar outra OF</button>
+    <button class="btn btn-outline" style="border-color:#c62828;color:#c62828" onclick="apagarDadosSalvos()">🗑&nbsp;&nbsp;Apagar dados (só depois de conferir o Excel)</button>
   </div>
 
   <div class="footer">Romaneio de Expedição · Prime Ondulados</div>
@@ -429,18 +474,42 @@ if ('serviceWorker' in navigator) {
 }
 
 // ========== ESTADO ==========
+const STORAGE_KEY = 'romaneio_paletes_v1';
+
 let workbook = null;
 let clientesData = {};        // { nomeDaAba(cliente): [ordens...] }
 let mapaOrdens   = new Map();  // of -> ordem (todos os clientes) p/ o romaneio final
 let ordens   = [];             // ordens do cliente selecionado
 let ofAtual  = null;
-let paletes  = {};
+let paletes  = carregarPaletesSalvos();  // { of: [{num,qtd}...] } — persistido no aparelho
+
+// Lê os paletes já lançados salvos no aparelho (localStorage), pra não perder
+// nada se a tela recarregar sozinha (ex.: puxar pra atualizar sem querer).
+function carregarPaletesSalvos() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) { return {}; }
+}
+function salvarPaletesStorage() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(paletes)); } catch (e) {}
+}
 
 // ========== UTILITÁRIOS ==========
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 function fmt(n) { return Number(n).toLocaleString('pt-BR'); }
+
+// Status de progresso de uma OF (mesmo critério na barra do topo e nos chips):
+// verde = ainda falta bastante · amarelo = faltando só 10% · vermelho = ultrapassou · azul = bateu exato
+function statusPedido(total, pedido) {
+  if (!pedido) return '';
+  if (total === pedido) return 'azul';
+  if (total > pedido) return 'vermelho';
+  if (total / pedido >= 0.90) return 'amarelo';
+  return 'verde';
+}
 
 // Normaliza string: minúsculas, sem acento
 function norm(s) {
@@ -636,6 +705,7 @@ function selecionarCliente() {
   document.getElementById('infoOf').style.display    = 'none';
   document.getElementById('cardOf').style.display     = 'none';
   document.getElementById('cardPalete').style.display = 'none';
+  document.getElementById('cardOfsPedido').style.display = 'none';
   document.getElementById('cardLista').style.display  = 'none';
 
   if (!aba) return;
@@ -643,6 +713,7 @@ function selecionarCliente() {
   ordens = clientesData[aba] || [];
   preencherSelect(ordens);
   document.getElementById('cardOf').style.display = 'block';
+  atualizarOfsPedido();
   setTimeout(() => document.getElementById('cardOf').scrollIntoView({ behavior:'smooth', block:'start' }), 60);
 }
 
@@ -698,6 +769,7 @@ function limparBusca() {
   preencherSelect(ordens);
   ofAtual = null;
   atualizarCardGerar();
+  atualizarOfsPedido();
 }
 
 // ========== SELECIONAR OF ==========
@@ -734,6 +806,16 @@ function selecionarOf() {
 
   atualizarLista();
   atualizarCardGerar();
+  atualizarOfsPedido();
+}
+
+// Seleciona uma OF a partir de um chip da lista "OFs do pedido" (atalho, sem digitar)
+function selecionarOfChip(of) {
+  document.getElementById('buscaOf').value = '';
+  document.getElementById('alertaOf').style.display = 'none';
+  preencherSelect(ordens);
+  document.getElementById('selOf').value = of;
+  selecionarOf();
 }
 
 // ========== TECLADO ==========
@@ -764,6 +846,7 @@ function salvarPalete() {
     document.getElementById('qtdPalete').focus(); return;
   }
 
+  if (!paletes[ofAtual.of]) paletes[ofAtual.of] = [];
   const listaOf = paletes[ofAtual.of];
   const idx = listaOf.findIndex(p => p.num === num);
   if (idx !== -1) {
@@ -780,8 +863,10 @@ function salvarPalete() {
   document.getElementById('msgPalete').style.display = 'none';
   mostrarFlash('✓  Palete ' + String(num).padStart(2,'0') + '\n' + fmt(qtd) + ' chapas');
   setTimeout(() => document.getElementById('numPalete').focus(), 80);
+  salvarPaletesStorage();
   atualizarLista();
   atualizarCardGerar();
+  atualizarOfsPedido();
 }
 
 // ========== LISTA ==========
@@ -799,8 +884,8 @@ function atualizarLista() {
   if (qtdPedido > 0) {
     colPedido.style.display = 'flex';
     document.getElementById('totalPedido').textContent = fmt(qtdPedido);
-    bar.className = totalProd > qtdPedido ? 'total-bar excedido'
-                  : (totalProd / qtdPedido >= 0.90 ? 'total-bar alerta' : 'total-bar');
+    const st = statusPedido(totalProd, qtdPedido);
+    bar.className = 'total-bar' + (st === 'azul' ? ' exato' : st === 'amarelo' ? ' alerta' : st === 'vermelho' ? ' excedido' : '');
   } else {
     colPedido.style.display = 'none';
     bar.className = 'total-bar';
@@ -823,8 +908,31 @@ function removerPalete(num) {
   if (!ofAtual) return;
   if (!confirm('Remover Palete ' + String(num).padStart(2,'0') + '?')) return;
   paletes[ofAtual.of] = paletes[ofAtual.of].filter(p => p.num !== num);
+  salvarPaletesStorage();
   atualizarLista();
   atualizarCardGerar();
+  atualizarOfsPedido();
+}
+
+// ========== OFs DO PEDIDO (chips coloridos) ==========
+// Mostra todas as OFs do cliente selecionado com status por cor, pra dar uma
+// visão rápida de quais já estão perto/no ponto/estouradas — sem atrapalhar
+// a digitação (fica embaixo do formulário de lançamento).
+function atualizarOfsPedido() {
+  const card = document.getElementById('cardOfsPedido');
+  const wrap = document.getElementById('ofsPedidoWrap');
+  if (!ordens || !ordens.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  wrap.innerHTML = ordens.map(o => {
+    const lista = paletes[o.of] || [];
+    const total = lista.reduce((s, p) => s + p.qtd, 0);
+    const st = statusPedido(total, o.qtdePedido) || 'verde';
+    const sel = ofAtual && ofAtual.of === o.of ? ' selecionado' : '';
+    const desc = [o.medidaChapa || o.medida, o.tipoPapel].filter(Boolean).join(' · ');
+    return '<div class="of-chip ' + st + sel + '" onclick="selecionarOfChip(\'' + o.of + '\')">'
+         + '<span class="dot"></span>OF ' + esc(o.of) + (desc ? ' · ' + esc(desc) : '')
+         + '</div>';
+  }).join('');
 }
 
 // ========== CARD GERAR ==========
@@ -856,7 +964,22 @@ function novaOf() {
   document.getElementById('cardLista').style.display = 'none';
   preencherSelect(ordens);
   atualizarCardGerar();
+  atualizarOfsPedido();
   setTimeout(() => document.getElementById('cardOf').scrollIntoView({ behavior:'smooth', block:'start' }), 80);
+}
+
+// Apaga do aparelho todos os paletes já lançados (todas as OFs/clientes).
+// Só deve ser usado DEPOIS de já ter baixado e conferido o Excel do romaneio.
+function apagarDadosSalvos() {
+  const temDados = Object.keys(paletes).some(k => paletes[k].length > 0);
+  if (!temDados) return;
+  if (!confirm('Isso vai apagar TODOS os paletes já lançados (de todas as OFs e clientes), inclusive os salvos no aparelho.\n\nUse isso só DEPOIS de já ter baixado e conferido o Excel do romaneio.\n\nTem certeza que quer apagar tudo?')) return;
+  paletes = {};
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  atualizarLista();
+  atualizarCardGerar();
+  atualizarOfsPedido();
+  mostrarFlash('🗑  Dados apagados');
 }
 
 // ========== GERAR EXCEL ==========
