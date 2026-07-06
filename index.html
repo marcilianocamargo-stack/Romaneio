@@ -211,6 +211,7 @@ input.inp-grande {
 
 .palete-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   background: #f0f6ff;
@@ -218,26 +219,27 @@ input.inp-grande {
   padding: 14px 16px;
   margin-bottom: 10px;
   border-left: 5px solid #1a56a0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
+.palete-item.aberto { border-left-color: #c62828; background: #fff2f2; }
 .pi-num { font-weight: 800; font-size: 20px; color: #1a56a0; }
 .pi-qtd { font-size: 17px; color: #444; margin-top: 2px; }
-.pi-del {
-  background: #fdecea;
+.pi-del-inline {
+  flex: 1 0 100%;
+  margin-top: 12px;
+  padding: 13px;
   border: none;
   border-radius: 10px;
-  width: 50px;
-  height: 50px;
-  font-size: 22px;
+  background: #c62828;
+  color: white;
+  font-weight: 800;
+  font-size: 16px;
   cursor: pointer;
-  color: #c62828;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
   transition: background .15s;
 }
-.pi-del:active { background: #f5c6c5; }
+.pi-del-inline:active { background: #a52222; }
 
 .lista-vazia { text-align: center; color: #999; font-size: 18px; padding: 24px 0; font-style: italic; }
 
@@ -454,8 +456,12 @@ input.inp-grande {
         <span class="t-num" id="totalPedido">0</span>
       </div>
     </div>
-    <div class="lista-tit">Lista de paletes</div>
-    <div id="listaPaletes"><div class="lista-vazia">Nenhum palete registrado</div></div>
+  </div>
+
+  <div class="card" id="cardBuscaPaletes" style="display:none">
+    <div class="step-title" style="margin-bottom:14px">🔍&nbsp;&nbsp;Consultar / Excluir Paletes</div>
+    <div class="ofs-pedido-wrap" id="buscaPaletesWrap"></div>
+    <div id="buscaPaletesDetalhe"></div>
   </div>
 
   <div class="card" id="cardGerar" style="display:none">
@@ -779,6 +785,7 @@ function limparBusca() {
   ofAtual = null;
   atualizarCardGerar();
   atualizarOfsPedido();
+  atualizarBuscaPaletes();
 }
 
 // ========== SELECIONAR OF ==========
@@ -816,6 +823,7 @@ function selecionarOf() {
   atualizarLista();
   atualizarCardGerar();
   atualizarOfsPedido();
+  atualizarBuscaPaletes();
 }
 
 // Seleciona uma OF a partir de um chip da lista "OFs do pedido" (atalho, sem digitar)
@@ -876,6 +884,7 @@ function salvarPalete() {
   atualizarLista();
   atualizarCardGerar();
   atualizarOfsPedido();
+  atualizarBuscaPaletes();
 }
 
 // ========== LISTA ==========
@@ -899,28 +908,6 @@ function atualizarLista() {
     colPedido.style.display = 'none';
     bar.className = 'total-bar';
   }
-
-  const div = document.getElementById('listaPaletes');
-  div.innerHTML = lista.length === 0
-    ? '<div class="lista-vazia">Nenhum palete registrado ainda</div>'
-    : lista.map(p => `
-      <div class="palete-item">
-        <div>
-          <div class="pi-num">Palete ${String(p.num).padStart(2,'0')}</div>
-          <div class="pi-qtd">${fmt(p.qtd)} chapas</div>
-        </div>
-        <button class="pi-del" onclick="removerPalete(${p.num})">✕</button>
-      </div>`).join('');
-}
-
-function removerPalete(num) {
-  if (!ofAtual) return;
-  if (!confirm('Remover Palete ' + String(num).padStart(2,'0') + '?')) return;
-  paletes[ofAtual.of] = paletes[ofAtual.of].filter(p => p.num !== num);
-  salvarPaletesStorage();
-  atualizarLista();
-  atualizarCardGerar();
-  atualizarOfsPedido();
 }
 
 // ========== OFs DO PEDIDO (chips coloridos) ==========
@@ -947,6 +934,82 @@ function atualizarOfsPedido() {
          + '<div class="of-chip-qtd">' + fmt(total) + ' / ' + fmt(pedido) + '</div>'
          + '</div>';
   }).join('');
+}
+
+// ========== CONSULTAR / EXCLUIR PALETES (chips, qualquer OF/cliente já lançado) ==========
+// Seção separada só pra achar e corrigir um lançamento errado: toca no chip da OF
+// pra ver os paletes dela, toca no palete pra revelar o botão de excluir.
+let ofBuscaAberta   = null;   // OF atualmente expandida nesta seção
+let paleteBuscaAberto = null; // { of, num } com o botão excluir revelado
+
+function atualizarBuscaPaletes() {
+  const card = document.getElementById('cardBuscaPaletes');
+  const wrap = document.getElementById('buscaPaletesWrap');
+  const det  = document.getElementById('buscaPaletesDetalhe');
+  const ofs  = Object.keys(paletes).filter(k => paletes[k].length > 0);
+
+  if (ofs.length === 0) {
+    card.style.display = 'none';
+    ofBuscaAberta = null;
+    paleteBuscaAberto = null;
+    return;
+  }
+  card.style.display = 'block';
+
+  if (ofBuscaAberta && !ofs.includes(ofBuscaAberta)) { ofBuscaAberta = null; paleteBuscaAberto = null; }
+
+  wrap.innerHTML = ofs.map(ofNum => {
+    const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
+    const lista = paletes[ofNum] || [];
+    const total = lista.reduce((s, p) => s + p.qtd, 0);
+    const pedido = ord ? (ord.qtdePedido || 0) : 0;
+    const st = statusPedido(total, pedido) || 'verde';
+    const sel = ofBuscaAberta === ofNum ? ' selecionado' : '';
+    const pct = pedido > 0 ? Math.min(100, (total / pedido) * 100) : 0;
+    const desc = ord && ord.cliente ? ord.cliente : '';
+    return '<div class="of-chip ' + st + sel + '" onclick="toggleBuscaOf(\'' + ofNum + '\')">'
+         + '<div class="of-chip-top"><span class="dot"></span>OF ' + esc(ofNum) + '</div>'
+         + (desc ? '<div class="of-chip-desc">' + esc(desc) + '</div>' : '')
+         + '<div class="of-chip-bar"><div class="of-chip-fill" style="width:' + pct + '%"></div></div>'
+         + '<div class="of-chip-qtd">' + fmt(total) + ' / ' + fmt(pedido) + '</div>'
+         + '</div>';
+  }).join('');
+
+  if (!ofBuscaAberta) { det.innerHTML = ''; return; }
+
+  const lista = paletes[ofBuscaAberta] || [];
+  det.innerHTML = '<div class="lista-tit" style="margin-top:16px">Paletes da OF ' + esc(ofBuscaAberta) + '</div>'
+    + (lista.length === 0
+      ? '<div class="lista-vazia">Nenhum palete nesta OF</div>'
+      : lista.map(p => {
+          const aberto = paleteBuscaAberto && paleteBuscaAberto.of === ofBuscaAberta && paleteBuscaAberto.num === p.num;
+          return '<div class="palete-item' + (aberto ? ' aberto' : '') + '" onclick="togglePaleteBusca(\'' + ofBuscaAberta + '\', ' + p.num + ')">'
+               + '<div><div class="pi-num">Palete ' + String(p.num).padStart(2, '0') + '</div><div class="pi-qtd">' + fmt(p.qtd) + ' chapas</div></div>'
+               + (aberto ? '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + ofBuscaAberta + '\', ' + p.num + ')">✕&nbsp;&nbsp;Excluir este palete</button>' : '')
+               + '</div>';
+        }).join(''));
+}
+
+function toggleBuscaOf(ofNum) {
+  ofBuscaAberta = (ofBuscaAberta === ofNum) ? null : ofNum;
+  paleteBuscaAberto = null;
+  atualizarBuscaPaletes();
+}
+
+function togglePaleteBusca(ofNum, num) {
+  paleteBuscaAberto = (paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.num === num) ? null : { of: ofNum, num };
+  atualizarBuscaPaletes();
+}
+
+function removerPaleteBusca(ofNum, num) {
+  if (!confirm('Remover Palete ' + String(num).padStart(2, '0') + ' da OF ' + ofNum + '?')) return;
+  paletes[ofNum] = (paletes[ofNum] || []).filter(p => p.num !== num);
+  salvarPaletesStorage();
+  paleteBuscaAberto = null;
+  if (ofAtual && ofAtual.of === ofNum) atualizarLista();
+  atualizarCardGerar();
+  atualizarOfsPedido();
+  atualizarBuscaPaletes();
 }
 
 // ========== CARD GERAR ==========
@@ -979,6 +1042,7 @@ function novaOf() {
   preencherSelect(ordens);
   atualizarCardGerar();
   atualizarOfsPedido();
+  atualizarBuscaPaletes();
   setTimeout(() => document.getElementById('cardOf').scrollIntoView({ behavior:'smooth', block:'start' }), 80);
 }
 
@@ -993,6 +1057,7 @@ function apagarDadosSalvos() {
   atualizarLista();
   atualizarCardGerar();
   atualizarOfsPedido();
+  atualizarBuscaPaletes();
   mostrarFlash('🗑  Dados apagados');
 }
 
@@ -1077,6 +1142,10 @@ function mostrarFlash(txt) {
 
 // ========== INICIALIZAÇÃO ==========
 autoCarregar();
+// Se já houver paletes salvos no aparelho (ex.: recarregou a página no meio do
+// romaneio), mostra "Gerar Romaneio" e "Consultar/Excluir Paletes" desde já.
+atualizarCardGerar();
+atualizarBuscaPaletes();
 </script>
 </body>
 </html>
