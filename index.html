@@ -983,7 +983,7 @@ function atualizarBuscaPaletes() {
   // Cada chip mostra seu resumo normalmente; a OF aberta expande e mostra os
   // paletes DENTRO do próprio chip (não numa área separada embaixo da grade).
   wrap.innerHTML = ofs.map(ofNum => {
-    const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
+    const ord = ordens.find(o => o.of === ofNum) || mapaOrdens.get(ofNum);
     const lista = paletes[ofNum] || [];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const pedido = ord ? (ord.qtdePedido || 0) : 0;
@@ -1065,7 +1065,7 @@ function atualizarCardGerar() {
   if (!resumoGerarVisivel) return;
 
   resumoDiv.innerHTML = ofs.map(ofNum => {
-    const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
+    const ord = ordens.find(o => o.of === ofNum) || mapaOrdens.get(ofNum);
     const lista = paletes[ofNum];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const ped = ord ? ord.qtdePedido : 0;
@@ -1126,7 +1126,7 @@ function _gerarEBaixarExcel(ofs) {
     ['Cliente','OF','OC','Medida Chapa (L × C)','Nº Palete','Qtde Palete','Qtde Pedido']
   ];
   ofs.forEach(ofNum => {
-    const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
+    const ord = ordens.find(o => o.of === ofNum) || mapaOrdens.get(ofNum);
     paletes[ofNum].forEach(p => romData.push([
       ord ? ord.cliente : '', ofNum, ord ? ord.oc : '', ord ? ord.medidaChapa : '',
       p.num, p.qtd, ord && ord.qtdePedido ? ord.qtdePedido : ''
@@ -1141,7 +1141,7 @@ function _gerarEBaixarExcel(ofs) {
     ['OF','Cliente','Tipo de Papel','Medida (L × C)','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
   ];
   ofs.forEach(ofNum => {
-    const ord = mapaOrdens.get(ofNum) || ordens.find(o => o.of === ofNum);
+    const ord = ordens.find(o => o.of === ofNum) || mapaOrdens.get(ofNum);
     const lista = paletes[ofNum];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const ped = ord ? ord.qtdePedido : 0;
