@@ -498,14 +498,22 @@ if ('serviceWorker' in navigator) {
 }
 
 // ========== ESTADO ==========
-const STORAGE_KEY = 'romaneio_paletes_v1';
+const STORAGE_KEY      = 'romaneio_paletes_v1';
+const INFO_STORAGE_KEY = 'romaneio_info_v1';
 
 let workbook = null;
 let clientesData = {};        // { nomeDaAba(cliente): [ordens...] }
-let mapaOrdens   = new Map();  // of -> ordem (todos os clientes) p/ o romaneio final
-let ordens   = [];             // ordens do cliente selecionado
+let mapaOrdens   = new Map();  // of -> ordem (todos os clientes) p/ fallback quando não há snapshot
+let ordens   = [];             // ordens do cliente (aba) selecionado
 let ofAtual  = null;
 let paletes  = carregarPaletesSalvos();  // { of: [{num,qtd}...] } — persistido no aparelho
+
+// Snapshot dos dados da OF (cliente, medida, pedido...) NO MOMENTO em que o
+// operador a selecionou. Necessário porque o mesmo nº de OF pode aparecer em
+// mais de uma aba da planilha (ex.: duplicidade/erro de digitação entre
+// abas) — sem isso, o romaneio final poderia puxar o cliente/medida errado
+// de outra aba em vez do que o operador realmente viu e lançou.
+let paletesInfo = carregarPaletesInfoSalvos();  // { of: {cliente, oc, medida, ...} }
 
 // Lê os paletes já lançados salvos no aparelho (localStorage), pra não perder
 // nada se a tela recarregar sozinha (ex.: puxar pra atualizar sem querer).
@@ -517,6 +525,23 @@ function carregarPaletesSalvos() {
 }
 function salvarPaletesStorage() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(paletes)); } catch (e) {}
+}
+
+function carregarPaletesInfoSalvos() {
+  try {
+    const raw = localStorage.getItem(INFO_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) { return {}; }
+}
+function salvarPaletesInfoStorage() {
+  try { localStorage.setItem(INFO_STORAGE_KEY, JSON.stringify(paletesInfo)); } catch (e) {}
+}
+
+// Resolve os dados de uma OF com prioridade: snapshot salvo (o que o operador
+// realmente viu ao lançar) → aba do cliente atualmente selecionado → mapa
+// geral (fallback só usado se a OF nunca foi selecionada nesta sessão/aparelho).
+function resolverOrdem(ofNum) {
+  return paletesInfo[ofNum] || ordens.find(o => o.of === ofNum) || mapaOrdens.get(ofNum);
 }
 
 // ========== UTILITÁRIOS ==========
@@ -649,6 +674,55 @@ function processarAba(ws) {
   return [...mapa.values()];
 }
 
+// ========== RECONCILIAÇÃO DE PALETES JÁ SALVOS (localStorage) ==========
+// Roda toda vez que uma planilha é carregada. Para cada OF que já tem
+// paletes registrados mas ainda não tem snapshot (paletesInfo) — ex.: dados
+// gravados antes desta versão do app, ou nunca "tocados" nesta planilha —
+// tenta preencher automaticamente quando a OF existe em uma única aba. Se a
+// OF existir em MAIS de uma aba (ambígua, como o caso DR Embalagem × RJ),
+// NÃO adivinha: avisa o operador pra ele reabrir a aba certa e tocar na OF
+// antes de gerar o romaneio, evitando repetir o erro de cliente trocado.
+function reconciliarPaletesSalvos() {
+  const ofsComPaletes = Object.keys(paletes).filter(k => paletes[k].length > 0);
+  const ambiguas = [];
+  const naoEncontradas = [];
+  let mudou = false;
+
+  ofsComPaletes.forEach(of => {
+    if (paletesInfo[of]) return;
+
+    const abasComEssaOf = Object.entries(clientesData)
+      .filter(([, lista]) => lista.some(o => o.of === of))
+      .map(([aba]) => aba);
+
+    if (abasComEssaOf.length === 1) {
+      const ordem = clientesData[abasComEssaOf[0]].find(o => o.of === of);
+      paletesInfo[of] = { ...ordem };
+      mudou = true;
+    } else if (abasComEssaOf.length > 1) {
+      ambiguas.push({ of, abas: abasComEssaOf });
+    } else {
+      naoEncontradas.push(of);
+    }
+  });
+
+  if (mudou) salvarPaletesInfoStorage();
+
+  if (ambiguas.length || naoEncontradas.length) {
+    let msg = '';
+    if (ambiguas.length) {
+      msg += '⚠ Estas OFs já têm paletes registrados e existem em MAIS DE UMA aba da planilha. Escolha a aba certa e toque na OF (mesmo sem lançar nada) antes de gerar o romaneio, pra corrigir os dados:\n\n';
+      msg += ambiguas.map(a => 'OF ' + a.of + '  →  ' + a.abas.join(' ou ')).join('\n');
+    }
+    if (naoEncontradas.length) {
+      if (msg) msg += '\n\n';
+      msg += '⚠ Estas OFs já têm paletes registrados mas não existem na planilha atual (provavelmente já expedidas em outro dia):\n\n';
+      msg += naoEncontradas.map(of => 'OF ' + of).join('\n');
+    }
+    alert(msg);
+  }
+}
+
 // ========== CARREGAR WORKBOOK (comum ao auto e ao manual) ==========
 // Cada aba do Excel = 1 cliente. Guarda as OFs de cada cliente e monta a lista.
 function carregarWorkbook(buf) {
@@ -663,6 +737,8 @@ function carregarWorkbook(buf) {
       r.forEach(o => { if (!mapaOrdens.has(o.of)) mapaOrdens.set(o.of, o); });
     }
   }
+
+  reconciliarPaletesSalvos();
 
   const clientes = Object.keys(clientesData);
   if (!clientes.length) return false;
@@ -810,6 +886,12 @@ function selecionarOf() {
   ofAtual = ordens.find(o => o.of === of);
   if (!ofAtual) return;
   if (!paletes[of]) paletes[of] = [];
+
+  // Grava o snapshot desta OF (cliente/medida/pedido tal como exibidos agora
+  // nesta aba). É esse snapshot que será usado no romaneio final, mesmo que
+  // o mesmo nº de OF exista (por engano) em outra aba da planilha.
+  paletesInfo[of] = { ...ofAtual };
+  salvarPaletesInfoStorage();
 
   let html = '';
   if (ofAtual.cliente) html += '<div class="info-linha">Cliente: <strong>' + esc(ofAtual.cliente) + '</strong></div>';
@@ -983,7 +1065,7 @@ function atualizarBuscaPaletes() {
   // Cada chip mostra seu resumo normalmente; a OF aberta expande e mostra os
   // paletes DENTRO do próprio chip (não numa área separada embaixo da grade).
   wrap.innerHTML = ofs.map(ofNum => {
-    const ord = ordens.find(o => o.of === ofNum) || mapaOrdens.get(ofNum);
+    const ord = resolverOrdem(ofNum);
     const lista = paletes[ofNum] || [];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const pedido = ord ? (ord.qtdePedido || 0) : 0;
@@ -1065,7 +1147,7 @@ function atualizarCardGerar() {
   if (!resumoGerarVisivel) return;
 
   resumoDiv.innerHTML = ofs.map(ofNum => {
-    const ord = ordens.find(o => o.of === ofNum) || mapaOrdens.get(ofNum);
+    const ord = resolverOrdem(ofNum);
     const lista = paletes[ofNum];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const ped = ord ? ord.qtdePedido : 0;
@@ -1126,7 +1208,7 @@ function _gerarEBaixarExcel(ofs) {
     ['Cliente','OF','OC','Medida Chapa (L × C)','Nº Palete','Qtde Palete','Qtde Pedido']
   ];
   ofs.forEach(ofNum => {
-    const ord = ordens.find(o => o.of === ofNum) || mapaOrdens.get(ofNum);
+    const ord = resolverOrdem(ofNum);
     paletes[ofNum].forEach(p => romData.push([
       ord ? ord.cliente : '', ofNum, ord ? ord.oc : '', ord ? ord.medidaChapa : '',
       p.num, p.qtd, ord && ord.qtdePedido ? ord.qtdePedido : ''
@@ -1141,7 +1223,7 @@ function _gerarEBaixarExcel(ofs) {
     ['OF','Cliente','Tipo de Papel','Medida (L × C)','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
   ];
   ofs.forEach(ofNum => {
-    const ord = ordens.find(o => o.of === ofNum) || mapaOrdens.get(ofNum);
+    const ord = resolverOrdem(ofNum);
     const lista = paletes[ofNum];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const ped = ord ? ord.qtdePedido : 0;
