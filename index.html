@@ -759,9 +759,12 @@ function carregarWorkbook(buf) {
 }
 
 // ========== AUTO-CARREGAR DO GITHUB ==========
-// Busca a programação que VOCÊ publicou (programacao-hoje.xlsx). Cache-busting
-// (?t=) + no-store para nunca pegar versão antiga em cache. NÃO existe upload
-// manual: o operador nunca tem o arquivo. Se falhar, mostra aviso + "Tentar novamente".
+// Busca a programação publicada no repo-fonte único (controle-producao-etiquetas),
+// direto via raw.githubusercontent.com — não depende do build do GitHub Pages.
+// Cache-busting (?t=) + no-store para nunca pegar versão antiga em cache. NÃO
+// existe upload manual: o operador nunca tem o arquivo. Se falhar, mostra aviso
+// + "Tentar novamente".
+const XLSX_FONTE_URL = 'https://raw.githubusercontent.com/marcilianocamargo-stack/controle-producao-etiquetas/main/programacao-hoje.xlsx';
 async function autoCarregar() {
   const statusAuto    = document.getElementById('statusAuto');
   const btnRecarregar = document.getElementById('btnRecarregar');
@@ -772,7 +775,7 @@ async function autoCarregar() {
   statusAuto.textContent = '⏳ Buscando a programação do dia...';
 
   try {
-    const resp = await fetch('./programacao-hoje.xlsx?t=' + Date.now(), { cache: 'no-store' });
+    const resp = await fetch(XLSX_FONTE_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!resp.ok) throw new Error('sem arquivo');
     const buf = await resp.arrayBuffer();
     if (!carregarWorkbook(buf)) throw new Error('sem OFs');
