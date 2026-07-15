@@ -414,7 +414,7 @@ input.inp-grande {
 
   <div class="card" id="cardOf" style="display:none">
     <div class="step-title"><span class="step-num" id="numPassoOf">2</span>Buscar Ordem de Fabricação (OF)</div>
-    <label class="lbl">Digite o número da OF:</label>
+    <label class="lbl">Digite o número da OP:</label>
     <div class="busca-row">
       <input type="text" id="buscaOf" placeholder="Ex: 123456" inputmode="numeric" autocomplete="off" oninput="filtrarOf()">
       <button class="btn-x" onclick="limparBusca()">✕</button>
@@ -422,10 +422,10 @@ input.inp-grande {
     <div class="msg err" id="alertaOf" style="display:none"></div>
     <label class="lbl">Ou selecione na lista:</label>
     <select id="selOf" onchange="selecionarOf()">
-      <option value="">— toque para escolher a OF —</option>
+      <option value="">— toque para escolher a OP —</option>
     </select>
     <div class="info-of" id="infoOf" style="display:none">
-      <div class="info-tit">OF Selecionada</div>
+      <div class="info-tit">OP Selecionada</div>
       <div id="infoOfBody"></div>
     </div>
   </div>
@@ -447,7 +447,7 @@ input.inp-grande {
   </div>
 
   <div class="card" id="cardOfsPedido" style="display:none">
-    <div class="ofs-pedido-tit">OFs do pedido · toque para trocar rápido</div>
+    <div class="ofs-pedido-tit">OPs do pedido · toque para trocar rápido</div>
     <div class="ofs-pedido-wrap" id="ofsPedidoWrap"></div>
   </div>
 
@@ -587,7 +587,7 @@ function findCol(headers, keys) {
 
 // ========== DETECÇÃO DE CABEÇALHO ==========
 function detectarCabecalho(data) {
-  const colsChave = ['of','cliente','qtde','pedido','medida','sliter',
+  const colsChave = ['of','op','cliente','qtde','pedido','medida','sliter',
                      'oc','largura','comprimento','seq','data','ml'];
   let melhorLinha = 0, melhorPts = -1;
 
@@ -595,7 +595,7 @@ function detectarCabecalho(data) {
     const row = data[r].map(c => norm(String(c)));
     let pts = row.filter(h => colsChave.some(k => h.includes(k))).length;
     if (row.filter(h => h && isNaN(parseFloat(h))).length < 2) pts -= 3;
-    if (row.some(h => h === 'of')) pts += 5;
+    if (row.some(h => h === 'of' || h === 'op')) pts += 5;
     if (pts > melhorPts) { melhorPts = pts; melhorLinha = r; }
   }
   return melhorLinha;
@@ -609,6 +609,18 @@ function isOfValida(val) {
 }
 function extrairOf(val) { return String(val).trim().split('.')[0]; }
 
+// OF central da programação (nº único por lote, exigência FSC/NF-e) — fica na
+// célula do título, acima do cabeçalho, no formato "OF: 000123".
+function extrairOfCentral(data, startRow) {
+  for (let r = 0; r < startRow; r++) {
+    for (const cel of (data[r] || [])) {
+      const m = /OF\s*:\s*0*(\d+)/i.exec(String(cel == null ? '' : cel));
+      if (m) return m[1];
+    }
+  }
+  return '';
+}
+
 // ========== PROCESSAR ABA ==========
 function processarAba(ws) {
   const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
@@ -618,7 +630,7 @@ function processarAba(ws) {
   const headers  = data[startRow].map(c => String(c).trim());
   const rows     = data.slice(startRow + 1);
 
-  const colOf  = findCol(headers, ['of','ordem fabricacao','ordem de fabricacao','o.f','o.f.','num of','nro of']);
+  const colOf  = findCol(headers, ['of','op','ordem fabricacao','ordem de fabricacao','ordem producao','ordem de producao','o.f','o.f.','num of','nro of']);
   const colCli = findCol(headers, ['cliente','client','razao social','nome cliente']);
   const colOC  = findCol(headers, ['oc','o.c','o.c.','ordem compra','ordem de compra','oc cliente','pedido cliente','nro pedido','nr pedido','num pedido','pedido']);
   const colQtd = findCol(headers, ['qtde pedido','qtde. pedido','quantidade pedido','qtd pedido','qtde chapa','qtd chapas','chapas','qtde prod','qtde. prod','quantidade prod','quantidade','qtde']);
@@ -635,6 +647,8 @@ function processarAba(ws) {
     if (max > 0) colOfFinal = scores.indexOf(max);
   }
   if (colOfFinal < 0) return null;
+
+  const ofCentral = extrairOfCentral(data, startRow);
 
   const resultado = rows
     .filter(r => isOfValida(r[colOfFinal]))
@@ -655,6 +669,7 @@ function processarAba(ws) {
       }
       return {
         of:          extrairOf(r[colOfFinal]),
+        ofCentral,
         cliente:     colCli >= 0 ? String(r[colCli]).trim() : '',
         oc:          colOC  >= 0 ? String(r[colOC]).trim()  : '',
         qtdePedido:  colQtd >= 0 ? (parseFloat(String(r[colQtd]).replace(',','.')) || 0) : 0,
@@ -850,7 +865,7 @@ function filtrarOf() {
 
   // Digitou um número que não existe em nenhuma OF deste cliente → alerta
   if (filtradas.length === 0) {
-    alerta.textContent = '⚠ Nenhuma OF com esse número neste cliente. Confira o número.';
+    alerta.textContent = '⚠ Nenhuma OP com esse número neste cliente. Confira o número.';
     alerta.style.display = 'block';
     document.getElementById('infoOf').style.display = 'none';
     document.getElementById('cardPalete').style.display = 'none';
@@ -1019,7 +1034,7 @@ function atualizarOfsPedido() {
     const desc = [o.medidaChapa || o.medida, o.tipoPapel].filter(Boolean).join(' · ');
     const pct = pedido > 0 ? Math.min(100, (total / pedido) * 100) : 0;
     return '<div class="of-chip ' + st + sel + '" onclick="selecionarOfChip(\'' + o.of + '\')">'
-         + '<div class="of-chip-top"><span class="dot"></span>OF ' + esc(o.of) + '</div>'
+         + '<div class="of-chip-top"><span class="dot"></span>OP ' + esc(o.of) + '</div>'
          + (desc ? '<div class="of-chip-desc">' + esc(desc) + '</div>' : '')
          + '<div class="of-chip-bar"><div class="of-chip-fill" style="width:' + pct + '%"></div></div>'
          + '<div class="of-chip-qtd">' + fmt(total) + ' / ' + fmt(pedido) + '</div>'
@@ -1074,7 +1089,7 @@ function atualizarBuscaPaletes() {
     const pct = pedido > 0 ? Math.min(100, (total / pedido) * 100) : 0;
     const desc = ord && ord.cliente ? ord.cliente : '';
 
-    const corpo = '<div class="of-chip-top"><span class="dot"></span>OF ' + esc(ofNum) + '</div>'
+    const corpo = '<div class="of-chip-top"><span class="dot"></span>OP ' + esc(ofNum) + '</div>'
          + (desc ? '<div class="of-chip-desc">' + esc(desc) + '</div>' : '')
          + '<div class="of-chip-bar"><div class="of-chip-fill" style="width:' + pct + '%"></div></div>'
          + '<div class="of-chip-qtd">' + fmt(total) + ' / ' + fmt(pedido) + '</div>';
@@ -1152,7 +1167,7 @@ function atualizarCardGerar() {
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const ped = ord ? ord.qtdePedido : 0;
     return `<div class="resumo-item">
-      <div class="ri-tit">OF ${ofNum}${ord && ord.cliente ? '  ·  ' + esc(ord.cliente) : ''}</div>
+      <div class="ri-tit">OP ${ofNum}${ord && ord.cliente ? '  ·  ' + esc(ord.cliente) : ''}</div>
       <div class="ri-det">${lista.length} palete(s) &nbsp;·&nbsp; ${fmt(total)} chapas${ped ? ' &nbsp;·&nbsp; Pedido: ' + fmt(ped) : ''}</div>
     </div>`;
   }).join('');
@@ -1205,22 +1220,22 @@ function _gerarEBaixarExcel(ofs) {
     ['ROMANEIO DE EXPEDIÇÃO - PRIME ONDULADOS'],
     ['Gerado em: ' + new Date().toLocaleString('pt-BR')],
     [],
-    ['Cliente','OF','OC','Medida Chapa (L × C)','Nº Palete','Qtde Palete','Qtde Pedido']
+    ['Cliente','OP','OF','OC','Medida Chapa (L × C)','Nº Palete','Qtde Palete','Qtde Pedido']
   ];
   ofs.forEach(ofNum => {
     const ord = resolverOrdem(ofNum);
     paletes[ofNum].forEach(p => romData.push([
-      ord ? ord.cliente : '', ofNum, ord ? ord.oc : '', ord ? ord.medidaChapa : '',
+      ord ? ord.cliente : '', ofNum, ord ? ord.ofCentral||'' : '', ord ? ord.oc : '', ord ? ord.medidaChapa : '',
       p.num, p.qtd, ord && ord.qtdePedido ? ord.qtdePedido : ''
     ]));
   });
   const wsRom = XLSX.utils.aoa_to_sheet(romData);
-  wsRom['!cols'] = [{wch:20},{wch:9},{wch:12},{wch:16},{wch:9},{wch:11},{wch:11}];
+  wsRom['!cols'] = [{wch:20},{wch:9},{wch:9},{wch:12},{wch:16},{wch:9},{wch:11},{wch:11}];
   XLSX.utils.book_append_sheet(wb, wsRom, 'Romaneio');
 
   const resData = [
-    ['RESUMO POR ORDEM DE FABRICAÇÃO'], [],
-    ['OF','Cliente','Tipo de Papel','Medida (L × C)','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
+    ['RESUMO POR ORDEM DE PRODUÇÃO'], [],
+    ['OP','OF','Cliente','Tipo de Papel','Medida (L × C)','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
   ];
   ofs.forEach(ofNum => {
     const ord = resolverOrdem(ofNum);
@@ -1229,6 +1244,7 @@ function _gerarEBaixarExcel(ofs) {
     const ped = ord ? ord.qtdePedido : 0;
     resData.push([
       ofNum,
+      ord ? ord.ofCentral||'' : '',
       ord ? ord.cliente : '',
       ord ? ord.tipoPapel : '',
       ord ? ord.medidaChapa : '',
@@ -1239,7 +1255,7 @@ function _gerarEBaixarExcel(ofs) {
     ]);
   });
   const wsRes = XLSX.utils.aoa_to_sheet(resData);
-  wsRes['!cols'] = [{wch:9},{wch:20},{wch:16},{wch:14},{wch:11},{wch:14},{wch:9},{wch:12}];
+  wsRes['!cols'] = [{wch:9},{wch:9},{wch:20},{wch:16},{wch:14},{wch:11},{wch:14},{wch:9},{wch:12}];
   XLSX.utils.book_append_sheet(wb, wsRes, 'Resumo');
 
   const data = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
