@@ -404,34 +404,35 @@ input.inp-grande {
     <button class="btn" id="btnRecarregar" style="display:none" onclick="autoCarregar()">↻&nbsp;&nbsp;Tentar novamente</button>
   </div>
 
-  <div class="card" id="cardCliente" style="display:none">
-    <div class="step-title"><span class="step-num">1</span>Cliente</div>
-    <label class="lbl">Escolha o cliente:</label>
-    <select id="selCliente" onchange="selecionarCliente()">
-      <option value="">— toque para escolher o cliente —</option>
-    </select>
-  </div>
-
   <div class="card" id="cardOf" style="display:none">
-    <div class="step-title"><span class="step-num" id="numPassoOf">2</span>Buscar Ordem de Fabricação (OF)</div>
-    <label class="lbl">Digite o número da OP:</label>
+    <div class="step-title"><span class="step-num" id="numPassoOf">1</span>Digite o número da OP</div>
     <div class="busca-row">
-      <input type="text" id="buscaOf" placeholder="Ex: 123456" inputmode="numeric" autocomplete="off" oninput="filtrarOf()">
+      <input class="inp-grande" style="text-align:left;font-size:28px;height:70px" type="text" id="buscaOf" placeholder="Ex: 123456" inputmode="numeric" autocomplete="off" oninput="filtrarOf()">
       <button class="btn-x" onclick="limparBusca()">✕</button>
     </div>
     <div class="msg err" id="alertaOf" style="display:none"></div>
-    <label class="lbl">Ou selecione na lista:</label>
-    <select id="selOf" onchange="selecionarOf()">
-      <option value="">— toque para escolher a OP —</option>
-    </select>
+    <div id="escolhaAmbigua" style="display:none;margin-top:10px"></div>
     <div class="info-of" id="infoOf" style="display:none">
       <div class="info-tit">OP Selecionada</div>
       <div id="infoOfBody"></div>
     </div>
   </div>
 
+  <div class="card" id="cardCliente" style="display:none">
+    <button class="btn btn-outline" id="btnVerPorCliente" style="margin-top:0" onclick="toggleVerPorCliente()">🔍&nbsp;&nbsp;Não sabe o número? Ver lista por cliente</button>
+    <div id="verPorClienteConteudo" style="display:none;margin-top:16px">
+      <label class="lbl">Escolha o cliente:</label>
+      <select id="selCliente" onchange="selecionarCliente()">
+        <option value="">— toque para escolher o cliente —</option>
+      </select>
+      <select id="selOf" onchange="selecionarOfDoSelect()" style="margin-top:12px;display:none">
+        <option value="">— toque para escolher a OP —</option>
+      </select>
+    </div>
+  </div>
+
   <div class="card" id="cardPalete" style="display:none">
-    <div class="step-title"><span class="step-num" id="numPassoPalete">3</span>Registrar Palete</div>
+    <div class="step-title"><span class="step-num" id="numPassoPalete">2</span>Registrar Palete</div>
     <div class="grid2">
       <div>
         <label class="lbl">Nº do Palete</label>
@@ -504,7 +505,9 @@ const INFO_STORAGE_KEY = 'romaneio_info_v1';
 let workbook = null;
 let clientesData = {};        // { nomeDaAba(cliente): [ordens...] }
 let mapaOrdens   = new Map();  // of -> ordem (todos os clientes) p/ fallback quando não há snapshot
-let ordens   = [];             // ordens do cliente (aba) selecionado
+let todasOrdens  = [];         // todas as ordens de todas as abas, achatadas, com {..., aba} — usada na busca global por OP
+let ordens   = [];             // ordens da aba (cliente/UF) da OF ativa no momento
+let abaAtual = null;           // aba/UF da OF ativa no momento
 let ofAtual  = null;
 let paletes  = carregarPaletesSalvos();  // { of: [{num,qtd}...] } — persistido no aparelho
 
@@ -744,12 +747,16 @@ function carregarWorkbook(buf) {
   workbook = XLSX.read(buf, { type: 'array', cellDates: true });
   clientesData = {};
   mapaOrdens = new Map();
+  todasOrdens = [];
 
   for (const aba of workbook.SheetNames) {
     const r = processarAba(workbook.Sheets[aba]);
     if (r && r.length) {
       clientesData[aba] = r;
-      r.forEach(o => { if (!mapaOrdens.has(o.of)) mapaOrdens.set(o.of, o); });
+      r.forEach(o => {
+        if (!mapaOrdens.has(o.of)) mapaOrdens.set(o.of, o);
+        todasOrdens.push({ ...o, aba });
+      });
     }
   }
 
@@ -768,8 +775,10 @@ function carregarWorkbook(buf) {
   });
   document.getElementById('cardCliente').style.display = 'block';
 
-  // Se o arquivo tem só 1 cliente, já seleciona automaticamente
-  if (clientes.length === 1) { sel.value = clientes[0]; selecionarCliente(); }
+  // A busca por OP funciona em todas as abas de uma vez — não é preciso
+  // escolher cliente/aba antes. O card de busca já fica visível assim que a
+  // planilha carrega.
+  document.getElementById('cardOf').style.display = 'block';
   return true;
 }
 
@@ -812,33 +821,31 @@ async function autoCarregar() {
   }
 }
 
-// ========== SELECIONAR CLIENTE (carrega as OFs automaticamente) ==========
-function selecionarCliente() {
-  const aba = document.getElementById('selCliente').value;
-  // Limpa qualquer seleção de OF anterior
-  ofAtual = null;
-  document.getElementById('buscaOf').value = '';
-  document.getElementById('alertaOf').style.display = 'none';
-  document.getElementById('selOf').value   = '';
-  document.getElementById('infoOf').style.display    = 'none';
-  document.getElementById('cardOf').style.display     = 'none';
-  document.getElementById('cardPalete').style.display = 'none';
-  document.getElementById('cardOfsPedido').style.display = 'none';
-  document.getElementById('cardLista').style.display  = 'none';
-
-  if (!aba) return;
-
-  ordens = clientesData[aba] || [];
-  preencherSelect(ordens);
-  document.getElementById('cardOf').style.display = 'block';
-  atualizarOfsPedido();
-  setTimeout(() => document.getElementById('cardOf').scrollIntoView({ behavior:'smooth', block:'start' }), 60);
+// ========== VER POR CLIENTE (navegação opcional, sem digitar número) ==========
+function toggleVerPorCliente() {
+  const conteudo = document.getElementById('verPorClienteConteudo');
+  const btn = document.getElementById('btnVerPorCliente');
+  const abrir = conteudo.style.display === 'none';
+  conteudo.style.display = abrir ? 'block' : 'none';
+  btn.textContent = abrir ? '🔼  Ocultar lista por cliente' : '🔍  Não sabe o número? Ver lista por cliente';
 }
 
-// ========== SELECT DE OF ==========
-function preencherSelect(lista) {
+function selecionarCliente() {
+  const aba = document.getElementById('selCliente').value;
+  const selOf = document.getElementById('selOf');
+  selOf.style.display = 'none';
+  selOf.value = '';
+  if (!aba) return;
+
+  preencherSelect(clientesData[aba] || [], aba);
+  selOf.style.display = 'block';
+}
+
+// ========== SELECT DE OF (dentro de "Ver por cliente") ==========
+function preencherSelect(lista, aba) {
   const sel = document.getElementById('selOf');
-  sel.innerHTML = '<option value="">— toque para escolher a OF —</option>';
+  sel.dataset.aba = aba || '';
+  sel.innerHTML = '<option value="">— toque para escolher a OP —</option>';
   lista.forEach(o => {
     const opt = document.createElement('option');
     opt.value = o.of;
@@ -847,75 +854,117 @@ function preencherSelect(lista) {
   });
 }
 
+function selecionarOfDoSelect() {
+  const sel = document.getElementById('selOf');
+  const of = sel.value;
+  if (!of) return;
+  const aba = sel.dataset.aba;
+  const ordem = (clientesData[aba] || []).find(o => o.of === of);
+  if (!ordem) return;
+  document.getElementById('buscaOf').value = '';
+  document.getElementById('alertaOf').style.display = 'none';
+  esconderEscolhaAmbigua();
+  ativarOf({ ...ordem, aba });
+}
+
+// ========== BUSCA GLOBAL DE OP (em todas as abas/UFs de uma vez) ==========
+// Retorna as ocorrências de uma OF idênticas em CLIENTE/OC/MEDIDA descartadas
+// (dedup), pra não tratar como "ambíguo" quando é só a mesma ordem repetida.
+function distintasPorDados(lista) {
+  const out = [];
+  lista.forEach(o => {
+    const existe = out.some(d => d.cliente === o.cliente && d.oc === o.oc && d.medidaChapa === o.medidaChapa);
+    if (!existe) out.push(o);
+  });
+  return out;
+}
+
+function esconderEscolhaAmbigua() {
+  document.getElementById('escolhaAmbigua').style.display = 'none';
+}
+
+function mostrarEscolhaAmbigua(matches) {
+  const div = document.getElementById('escolhaAmbigua');
+  div.innerHTML = '<div class="msg err" style="display:block;margin-top:0">⚠ Esta OP existe em mais de uma aba com dados diferentes. Toque na correta:</div>'
+    + matches.map(o => {
+        const desc = [o.cliente, o.medidaChapa].filter(Boolean).join(' · ');
+        return '<button type="button" class="btn btn-outline" style="margin-top:8px;text-align:left" onclick="ativarOfAmbigua(\'' + esc(o.of) + '\',\'' + esc(o.aba) + '\')">'
+             + esc(o.aba) + (desc ? ' — ' + esc(desc) : '') + '</button>';
+      }).join('');
+  div.style.display = 'block';
+}
+
+function ativarOfAmbigua(of, aba) {
+  const ordem = todasOrdens.find(o => o.of === of && o.aba === aba);
+  if (!ordem) return;
+  esconderEscolhaAmbigua();
+  ativarOf(ordem);
+}
+
 function filtrarOf() {
   const busca = document.getElementById('buscaOf').value.trim();
   const alerta = document.getElementById('alertaOf');
-  if (!busca) { alerta.style.display = 'none'; preencherSelect(ordens); return; }
-
-  const bNorm = norm(busca);
-  const filtradas = ordens.filter(o => o.of.includes(busca) || norm(o.cliente).includes(bNorm));
-  preencherSelect(filtradas);
-
-  // Só auto-seleciona quando o número digitado é EXATAMENTE o de uma OF.
-  // (antes auto-selecionava com 1 resultado parcial e pulava pra OF errada)
-  const exata = ordens.find(o => o.of === busca);
-  if (exata) {
+  esconderEscolhaAmbigua();
+  if (!busca) {
     alerta.style.display = 'none';
-    document.getElementById('selOf').value = exata.of;
-    selecionarOf();
+    document.getElementById('infoOf').style.display = 'none';
+    document.getElementById('cardPalete').style.display = 'none';
     return;
   }
 
-  // Digitou um número que não existe em nenhuma OF deste cliente → alerta
-  if (filtradas.length === 0) {
-    alerta.textContent = '⚠ Nenhuma OP com esse número neste cliente. Confira o número.';
-    alerta.style.display = 'block';
+  // Só auto-seleciona quando o número digitado é EXATAMENTE o de uma OF —
+  // buscando em TODAS as abas/UFs, não só na do cliente escolhido.
+  const exatas = distintasPorDados(todasOrdens.filter(o => o.of === busca));
+  if (exatas.length === 1) {
+    alerta.style.display = 'none';
+    ativarOf(exatas[0]);
+    return;
+  }
+  if (exatas.length > 1) {
     document.getElementById('infoOf').style.display = 'none';
     document.getElementById('cardPalete').style.display = 'none';
-  } else {
-    alerta.style.display = 'none';
+    mostrarEscolhaAmbigua(exatas);
+    return;
   }
+
+  // Nenhuma OF com esse número em nenhuma aba → alerta
+  alerta.textContent = '⚠ Nenhuma OP com esse número. Confira o número.';
+  alerta.style.display = 'block';
+  document.getElementById('infoOf').style.display = 'none';
+  document.getElementById('cardPalete').style.display = 'none';
 }
 
 function limparBusca() {
   document.getElementById('buscaOf').value = '';
   document.getElementById('alertaOf').style.display = 'none';
-  document.getElementById('selOf').value = '';
+  esconderEscolhaAmbigua();
   document.getElementById('infoOf').style.display = 'none';
   document.getElementById('cardPalete').style.display = 'none';
   document.getElementById('cardLista').style.display = 'none';
-  preencherSelect(ordens);
   ofAtual = null;
   atualizarCardGerar();
   atualizarOfsPedido();
   atualizarBuscaPaletes();
 }
 
-// ========== SELECIONAR OF ==========
-function selecionarOf() {
-  const of = document.getElementById('selOf').value;
-  document.getElementById('alertaOf').style.display = 'none';
-  if (!of) {
-    document.getElementById('infoOf').style.display = 'none';
-    document.getElementById('cardPalete').style.display = 'none';
-    ofAtual = null;
-    return;
-  }
-  ofAtual = ordens.find(o => o.of === of);
-  if (!ofAtual) return;
-  if (!paletes[of]) paletes[of] = [];
+// ========== ATIVAR OF (achada pela busca global, pela lista por cliente ou por um chip) ==========
+function ativarOf(ordem) {
+  ofAtual = ordem;
+  abaAtual = ordem.aba;
+  ordens = clientesData[abaAtual] || [ordem];
+  if (!paletes[ordem.of]) paletes[ordem.of] = [];
 
   // Grava o snapshot desta OF (cliente/medida/pedido tal como exibidos agora
   // nesta aba). É esse snapshot que será usado no romaneio final, mesmo que
   // o mesmo nº de OF exista (por engano) em outra aba da planilha.
-  paletesInfo[of] = { ...ofAtual };
+  paletesInfo[ordem.of] = { ...ordem };
   salvarPaletesInfoStorage();
 
   let html = '';
-  if (ofAtual.cliente) html += '<div class="info-linha">Cliente: <strong>' + esc(ofAtual.cliente) + '</strong></div>';
-  if (ofAtual.oc && ofAtual.oc !== '' && ofAtual.oc !== '0') html += '<div class="info-linha">OC: <strong>' + esc(ofAtual.oc) + '</strong></div>';
-  if (ofAtual.medidaChapa) html += '<div class="info-linha">Medida: <strong>' + esc(ofAtual.medidaChapa) + '</strong></div>';
-  if (ofAtual.qtdePedido) html += '<div class="info-linha">Qtde do Pedido: <strong>' + fmt(ofAtual.qtdePedido) + ' chapas</strong></div>';
+  if (ordem.cliente) html += '<div class="info-linha">Cliente: <strong>' + esc(ordem.cliente) + '</strong></div>';
+  if (ordem.oc && ordem.oc !== '' && ordem.oc !== '0') html += '<div class="info-linha">OC: <strong>' + esc(ordem.oc) + '</strong></div>';
+  if (ordem.medidaChapa) html += '<div class="info-linha">Medida: <strong>' + esc(ordem.medidaChapa) + '</strong></div>';
+  if (ordem.qtdePedido) html += '<div class="info-linha">Qtde do Pedido: <strong>' + fmt(ordem.qtdePedido) + ' chapas</strong></div>';
 
   document.getElementById('infoOfBody').innerHTML = html || '<div class="info-linha" style="color:#999">Sem dados adicionais</div>';
   document.getElementById('infoOf').style.display     = 'block';
@@ -937,11 +986,12 @@ function selecionarOf() {
 
 // Seleciona uma OF a partir de um chip da lista "OFs do pedido" (atalho, sem digitar)
 function selecionarOfChip(of) {
+  const ordem = ordens.find(o => o.of === of);
+  if (!ordem) return;
   document.getElementById('buscaOf').value = '';
   document.getElementById('alertaOf').style.display = 'none';
-  preencherSelect(ordens);
-  document.getElementById('selOf').value = of;
-  selecionarOf();
+  esconderEscolhaAmbigua();
+  ativarOf({ ...ordem, aba: abaAtual });
 }
 
 // ========== TECLADO ==========
@@ -1180,11 +1230,10 @@ function novaOf() {
   ofAtual = null;
   document.getElementById('buscaOf').value = '';
   document.getElementById('alertaOf').style.display = 'none';
-  document.getElementById('selOf').value = '';
+  esconderEscolhaAmbigua();
   document.getElementById('infoOf').style.display = 'none';
   document.getElementById('cardPalete').style.display = 'none';
   document.getElementById('cardLista').style.display = 'none';
-  preencherSelect(ordens);
   atualizarCardGerar();
   atualizarOfsPedido();
   atualizarBuscaPaletes();
