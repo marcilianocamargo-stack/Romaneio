@@ -1287,7 +1287,7 @@ function _gerarEBaixarExcel(ofs) {
 
   const resData = [
     ['RESUMO POR ORDEM DE PRODUÇÃO'], [],
-    ['OP','OF','Cliente','Tipo de Papel','Medida (L × C)','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
+    ['OP','OF','Cliente','OC','Tipo de Papel','Medida (L × C)','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
   ];
   ofs.forEach(ofNum => {
     const ord = resolverOrdem(ofNum);
@@ -1298,6 +1298,7 @@ function _gerarEBaixarExcel(ofs) {
       ofNum,
       ord ? ord.ofCentral||'' : '',
       ord ? ord.cliente : '',
+      ord ? ord.oc : '',
       ord ? ord.tipoPapel : '',
       ord ? ord.medidaChapa : '',
       ped || '',
@@ -1307,7 +1308,7 @@ function _gerarEBaixarExcel(ofs) {
     ]);
   });
   const wsRes = XLSX.utils.aoa_to_sheet(resData);
-  wsRes['!cols'] = [{wch:9},{wch:9},{wch:20},{wch:16},{wch:14},{wch:11},{wch:14},{wch:9},{wch:12}];
+  wsRes['!cols'] = [{wch:9},{wch:9},{wch:20},{wch:12},{wch:16},{wch:14},{wch:11},{wch:14},{wch:9},{wch:12}];
   XLSX.utils.book_append_sheet(wb, wsRes, 'Resumo');
 
   const data = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
