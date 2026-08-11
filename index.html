@@ -1255,6 +1255,8 @@ function apagarDadosSalvos() {
   mostrarFlash('🗑  Dados apagados');
 }
 
+function limparNomeArquivo(s){return String(s||'').trim().replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,'_');}
+
 // ========== GERAR EXCEL ==========
 function gerarExcel() {
   const ofs = Object.keys(paletes).filter(k => paletes[k].length > 0);
@@ -1312,8 +1314,14 @@ function _gerarEBaixarExcel(ofs) {
   XLSX.utils.book_append_sheet(wb, wsRes, 'Resumo');
 
   const data = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-  const ofStr = ofs.length === 1 ? '_OF'+ofs[0] : '_'+ofs.length+'OFs';
-  XLSX.writeFile(wb, 'Romaneio_Prime'+ofStr+'_'+data+'.xlsx');
+  const nomesClientes = [...new Set(ofs.map(ofNum => {
+    const ord = resolverOrdem(ofNum);
+    return ord && ord.cliente ? limparNomeArquivo(ord.cliente) : '';
+  }).filter(Boolean))];
+  const clientesPart = nomesClientes.length
+    ? '_'+(nomesClientes.length>3 ? nomesClientes.slice(0,3).join('-')+'+'+(nomesClientes.length-3) : nomesClientes.join('-'))
+    : '';
+  XLSX.writeFile(wb, 'Romaneio_'+data+clientesPart+'.xlsx');
   mostrarFlash('✓  Romaneio baixado!');
 }
 
