@@ -223,7 +223,9 @@ input.inp-grande {
   -webkit-tap-highlight-color: transparent;
 }
 .palete-item.aberto { border-left-color: #c62828; background: #fff2f2; }
+.palete-item.marcado { border-left-color: #2e7d32; background: #eef8ef; }
 .pi-num { font-weight: 800; font-size: 20px; color: #1a56a0; }
+.palete-item.marcado .pi-num { color: #2e7d32; }
 .pi-qtd { font-size: 17px; color: #444; margin-top: 2px; }
 .pi-del-inline {
   flex: 1 0 100%;
@@ -400,7 +402,7 @@ input.inp-grande {
   </div>
 
   <div class="card" id="cardAuto" style="display:none">
-    <div class="arq-status info" id="statusAuto" style="display:block;margin-top:0">⏳ Buscando a programação do dia...</div>
+    <div class="arq-status info" id="statusAuto" style="display:block;margin-top:0">⏳ Buscando o estoque atual...</div>
     <button class="btn" id="btnRecarregar" style="display:none" onclick="autoCarregar()">↻&nbsp;&nbsp;Tentar novamente</button>
   </div>
 
@@ -411,7 +413,6 @@ input.inp-grande {
       <button class="btn-x" onclick="limparBusca()">✕</button>
     </div>
     <div class="msg err" id="alertaOf" style="display:none"></div>
-    <div id="escolhaAmbigua" style="display:none;margin-top:10px"></div>
     <div class="info-of" id="infoOf" style="display:none">
       <div class="info-tit">OP Selecionada</div>
       <div id="infoOfBody"></div>
@@ -432,31 +433,21 @@ input.inp-grande {
   </div>
 
   <div class="card" id="cardPalete" style="display:none">
-    <div class="step-title"><span class="step-num" id="numPassoPalete">2</span>Registrar Palete</div>
-    <div class="grid2">
-      <div>
-        <label class="lbl">Nº do Palete</label>
-        <input class="inp-grande" type="number" id="numPalete" min="1" max="999" placeholder="01" inputmode="numeric" onkeydown="teclaNumPalete(event)">
-      </div>
-      <div>
-        <label class="lbl">Qtde de Chapas</label>
-        <input class="inp-grande" type="number" id="qtdPalete" min="1" placeholder="000" inputmode="numeric" onkeydown="teclaQtd(event)">
-      </div>
-    </div>
-    <button class="btn btn-verde" onclick="salvarPalete()">✓&nbsp;&nbsp;SALVAR PALETE</button>
-    <div class="msg" id="msgPalete"></div>
+    <div class="step-title"><span class="step-num" id="numPassoPalete">2</span>Toque nos paletes que vão neste romaneio</div>
+    <p style="font-size:14px;color:#888;margin-bottom:14px">Só aparece o que realmente está em estoque para essa OP.</p>
+    <div id="listaPaletesEstoque"></div>
   </div>
 
   <div class="card" id="cardOfsPedido" style="display:none">
-    <div class="ofs-pedido-tit">OPs do pedido · toque para trocar rápido</div>
+    <div class="ofs-pedido-tit">OPs do mesmo cliente · toque para trocar rápido</div>
     <div class="ofs-pedido-wrap" id="ofsPedidoWrap"></div>
   </div>
 
   <div class="card" id="cardLista" style="display:none">
-    <div class="step-title" style="margin-bottom:14px">Paletes Registrados</div>
+    <div class="step-title" style="margin-bottom:14px">Paletes Selecionados</div>
     <div class="total-bar" id="totalBar">
       <div class="t-col">
-        <span class="t-lbl">Total produzido</span>
+        <span class="t-lbl">Total selecionado</span>
         <span class="t-num" id="totalProd">0</span>
       </div>
       <div class="t-col" id="totalPedidoCol" style="text-align:right;display:none">
@@ -467,7 +458,7 @@ input.inp-grande {
   </div>
 
   <div class="card" id="cardBuscaPaletes" style="display:none">
-    <button class="btn btn-outline" id="btnBuscaPaletes" style="margin-top:0" onclick="toggleBuscaPaletesVisivel()">🔍&nbsp;&nbsp;Consultar / Excluir Paletes</button>
+    <button class="btn btn-outline" id="btnBuscaPaletes" style="margin-top:0" onclick="toggleBuscaPaletesVisivel()">🔍&nbsp;&nbsp;Ver todos os paletes selecionados</button>
     <div id="buscaPaletesConteudo" style="display:none;margin-top:16px">
       <div class="ofs-pedido-wrap" id="buscaPaletesWrap"></div>
     </div>
@@ -477,9 +468,9 @@ input.inp-grande {
     <div class="step-title"><span class="step-num">✓</span>Gerar Romaneio</div>
     <button class="btn btn-outline" id="btnResumoGerar" style="margin-top:0" onclick="toggleResumoGerarVisivel()">📋&nbsp;&nbsp;Ver resumo dos paletes</button>
     <div id="resumoGeral" style="display:none;margin-top:14px"></div>
-    <button class="btn btn-laranja" onclick="gerarExcel()">⬇&nbsp;&nbsp;BAIXAR EXCEL (ROMANEIO)</button>
+    <button class="btn btn-laranja" onclick="gerarExcel()">⬇&nbsp;&nbsp;BAIXAR EXCEL (ROMANEIO) E DAR BAIXA</button>
     <button class="btn btn-cinza" onclick="novaOf()">+&nbsp;&nbsp;Registrar outra OF</button>
-    <button class="btn btn-outline" style="border-color:#c62828;color:#c62828" onclick="apagarDadosSalvos()">🗑&nbsp;&nbsp;Apagar dados (só depois de conferir o Excel)</button>
+    <button class="btn btn-outline" style="border-color:#c62828;color:#c62828" onclick="apagarDadosSalvos()">🗑&nbsp;&nbsp;Apagar seleção local (só depois de conferir o Excel)</button>
   </div>
 
   <div class="footer">Romaneio de Expedição · Prime Ondulados</div>
@@ -499,27 +490,22 @@ if ('serviceWorker' in navigator) {
 }
 
 // ========== ESTADO ==========
-const STORAGE_KEY      = 'romaneio_paletes_v1';
-const INFO_STORAGE_KEY = 'romaneio_info_v1';
+const STORAGE_KEY = 'romaneio_paletes_v2';
 
-let workbook = null;
-let clientesData = {};        // { nomeDaAba(cliente): [ordens...] }
-let mapaOrdens   = new Map();  // of -> ordem (todos os clientes) p/ fallback quando não há snapshot
-let todasOrdens  = [];         // todas as ordens de todas as abas, achatadas, com {..., aba} — usada na busca global por OP
-let ordens   = [];             // ordens da aba (cliente/UF) da OF ativa no momento
-let abaAtual = null;           // aba/UF da OF ativa no momento
+// estoque.json é publicado pelo mesmo sistema que registra os paletes
+// (registrar_palete_live.py) e já reflete "produzido menos o que já saiu"
+// -- é a única fonte de dados do Romaneio agora. Cada palete ali já carrega
+// cliente/OC/medida/qtde pedido consigo, então não é preciso mais buscar a
+// planilha de programação separadamente.
+const ESTOQUE_URL = 'https://raw.githubusercontent.com/marcilianocamargo-stack/controle-producao-etiquetas/main/estoque.json';
+const SAIDA_WEBHOOK_URL = 'https://n8n.mcamargo.uk/webhook/saida-estoque';
+
+let estoquePorOf  = new Map();  // of -> [{numPalete, chapas, peso, medida, ...}] (paletes reais em estoque)
+let infoPorOf     = new Map();  // of -> {cliente, oc, ofCentral, tipoPapel, medidaChapa, qtdePedido}
+let clientesData  = new Map();  // cliente -> [ofs...] (só pra navegação "ver por cliente")
 let ofAtual  = null;
-let paletes  = carregarPaletesSalvos();  // { of: [{num,qtd}...] } — persistido no aparelho
+let paletes  = carregarPaletesSalvos();  // { of: [{num, numStr, qtd, peso}] } -- selecionados NESTE romaneio, persistido no aparelho
 
-// Snapshot dos dados da OF (cliente, medida, pedido...) NO MOMENTO em que o
-// operador a selecionou. Necessário porque o mesmo nº de OF pode aparecer em
-// mais de uma aba da planilha (ex.: duplicidade/erro de digitação entre
-// abas) — sem isso, o romaneio final poderia puxar o cliente/medida errado
-// de outra aba em vez do que o operador realmente viu e lançou.
-let paletesInfo = carregarPaletesInfoSalvos();  // { of: {cliente, oc, medida, ...} }
-
-// Lê os paletes já lançados salvos no aparelho (localStorage), pra não perder
-// nada se a tela recarregar sozinha (ex.: puxar pra atualizar sem querer).
 function carregarPaletesSalvos() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -530,30 +516,14 @@ function salvarPaletesStorage() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(paletes)); } catch (e) {}
 }
 
-function carregarPaletesInfoSalvos() {
-  try {
-    const raw = localStorage.getItem(INFO_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (e) { return {}; }
-}
-function salvarPaletesInfoStorage() {
-  try { localStorage.setItem(INFO_STORAGE_KEY, JSON.stringify(paletesInfo)); } catch (e) {}
-}
-
-// Resolve os dados de uma OF com prioridade: snapshot salvo (o que o operador
-// realmente viu ao lançar) → aba do cliente atualmente selecionado → mapa
-// geral (fallback só usado se a OF nunca foi selecionada nesta sessão/aparelho).
-function resolverOrdem(ofNum) {
-  return paletesInfo[ofNum] || ordens.find(o => o.of === ofNum) || mapaOrdens.get(ofNum);
-}
-
 // ========== UTILITÁRIOS ==========
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 function fmt(n) { return Number(n).toLocaleString('pt-BR'); }
+function fmtKg(n) { return Number(n||0).toLocaleString('pt-BR', {maximumFractionDigits:1}); }
 
-// Status de progresso de uma OF (mesmo critério na barra do topo e nos chips):
+// Status de progresso de uma OP (mesmo critério na barra do topo e nos chips):
 // verde = ainda falta bastante · amarelo = faltando só 10% · vermelho = ultrapassou · azul = bateu exato
 function statusPedido(total, pedido) {
   if (!pedido) return '';
@@ -563,232 +533,50 @@ function statusPedido(total, pedido) {
   return 'verde';
 }
 
-// Normaliza string: minúsculas, sem acento
-function norm(s) {
-  return String(s).trim().toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '');
-}
+// ========== CARREGAR ESTOQUE ==========
+function carregarEstoque(lista) {
+  estoquePorOf = new Map();
+  infoPorOf = new Map();
+  clientesData = new Map();
 
-// Busca índice de coluna com 3 níveis: exato → parcial → inverso
-function findCol(headers, keys) {
-  const normed = headers.map(norm);
-  for (const k of keys) {
-    const i = normed.findIndex(h => h === norm(k));
-    if (i >= 0) return i;
-  }
-  for (const k of keys) {
-    const i = normed.findIndex(h => h.includes(norm(k)));
-    if (i >= 0) return i;
-  }
-  for (const k of keys) {
-    const nk = norm(k);
-    const i = normed.findIndex(h => h.length >= 2 && nk.includes(h));
-    if (i >= 0) return i;
-  }
-  return -1;
-}
-
-// ========== DETECÇÃO DE CABEÇALHO ==========
-function detectarCabecalho(data) {
-  const colsChave = ['of','op','cliente','qtde','pedido','medida','sliter',
-                     'oc','largura','comprimento','seq','data','ml'];
-  let melhorLinha = 0, melhorPts = -1;
-
-  for (let r = 0; r < Math.min(15, data.length); r++) {
-    const row = data[r].map(c => norm(String(c)));
-    let pts = row.filter(h => colsChave.some(k => h.includes(k))).length;
-    if (row.filter(h => h && isNaN(parseFloat(h))).length < 2) pts -= 3;
-    if (row.some(h => h === 'of' || h === 'op')) pts += 5;
-    if (pts > melhorPts) { melhorPts = pts; melhorLinha = r; }
-  }
-  return melhorLinha;
-}
-
-// ========== VALIDAÇÃO E EXTRAÇÃO DE OF ==========
-function isOfValida(val) {
-  if (val === null || val === undefined || val === '') return false;
-  const s = String(val).trim().replace(/\.0*$/, '');
-  return /^\d+$/.test(s) && parseInt(s, 10) > 100000;
-}
-function extrairOf(val) { return String(val).trim().split('.')[0]; }
-
-// OF central da programação (nº único por lote, exigência FSC/NF-e) — fica na
-// célula do título, acima do cabeçalho, no formato "OF: 000123".
-function extrairOfCentral(data, startRow) {
-  for (let r = 0; r < startRow; r++) {
-    for (const cel of (data[r] || [])) {
-      const m = /OF\s*:\s*0*(\d+)/i.exec(String(cel == null ? '' : cel));
-      if (m) return m[1];
-    }
-  }
-  return '';
-}
-
-// ========== PROCESSAR ABA ==========
-function processarAba(ws) {
-  const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
-  if (!data || data.length < 2) return null;
-
-  const startRow = detectarCabecalho(data);
-  const headers  = data[startRow].map(c => String(c).trim());
-  const rows     = data.slice(startRow + 1);
-
-  const colOf  = findCol(headers, ['of','op','ordem fabricacao','ordem de fabricacao','ordem producao','ordem de producao','o.f','o.f.','num of','nro of']);
-  const colCli = findCol(headers, ['cliente','client','razao social','nome cliente']);
-  const colOC  = findCol(headers, ['oc','o.c','o.c.','ordem compra','ordem de compra','oc cliente','pedido cliente','nro pedido','nr pedido','num pedido','pedido']);
-  const colQtd = findCol(headers, ['qtde pedido','qtde. pedido','quantidade pedido','qtd pedido','qtde chapa','qtd chapas','chapas','qtde prod','qtde. prod','quantidade prod','quantidade','qtde']);
-  const colMed = findCol(headers, ['sliter vincadeira','sliter','vincadeira','medida','formato']);
-  const colLarg = findCol(headers, ['largura','larg']);
-  const colComp = findCol(headers, ['comprimento','comp','facao']);
-  const colPap  = findCol(headers, ['tipo de papel','tipo papel','papelao','papel','p.o','p.o.','estrutura','onda']);
-
-  // Fallback: encontra coluna com mais valores > 100000 se não achou "OF"
-  let colOfFinal = colOf;
-  if (colOfFinal < 0) {
-    const scores = headers.map((_, ci) => rows.filter(r => isOfValida(r[ci])).length);
-    const max = Math.max(...scores);
-    if (max > 0) colOfFinal = scores.indexOf(max);
-  }
-  if (colOfFinal < 0) return null;
-
-  const ofCentral = extrairOfCentral(data, startRow);
-
-  const resultado = rows
-    .filter(r => isOfValida(r[colOfFinal]))
-    .map(r => {
-      // Medidas da CHAPA (largura x comprimento) — o que interessa no Excel
-      let largura = '', comprimento = '';
-      if (colLarg >= 0) { const lg = String(r[colLarg]).trim(); if (lg && lg !== '0') largura = lg; }
-      if (colComp >= 0) { const cp = String(r[colComp]).trim(); if (cp && cp !== '0') comprimento = cp; }
-      const medidaChapa = (largura && comprimento) ? (largura + ' × ' + comprimento)
-                                                   : (largura || comprimento || '');
-
-      // Medida do sliter/vincadeira (mantida só para exibição na tela)
-      let medida = '';
-      if (colMed >= 0 && String(r[colMed]).trim() && norm(r[colMed]) !== 'x') {
-        medida = String(r[colMed]).trim();
-      } else {
-        medida = medidaChapa;
-      }
-      return {
-        of:          extrairOf(r[colOfFinal]),
-        ofCentral,
-        cliente:     colCli >= 0 ? String(r[colCli]).trim() : '',
-        oc:          colOC  >= 0 ? String(r[colOC]).trim()  : '',
-        qtdePedido:  colQtd >= 0 ? (parseFloat(String(r[colQtd]).replace(',','.')) || 0) : 0,
-        tipoPapel:   colPap >= 0 ? String(r[colPap]).trim() : '',
-        medida,        // sliter (tela)
-        largura,       // chapa
-        comprimento,   // chapa
-        medidaChapa,   // "largura × comprimento" (Excel)
-      };
-    });
-
-  // Deduplicar mantendo maior qtdePedido
-  const mapa = new Map();
-  for (const o of resultado) {
-    if (!mapa.has(o.of) || o.qtdePedido > mapa.get(o.of).qtdePedido) mapa.set(o.of, o);
-  }
-  return [...mapa.values()];
-}
-
-// ========== RECONCILIAÇÃO DE PALETES JÁ SALVOS (localStorage) ==========
-// Roda toda vez que uma planilha é carregada. Para cada OF que já tem
-// paletes registrados mas ainda não tem snapshot (paletesInfo) — ex.: dados
-// gravados antes desta versão do app, ou nunca "tocados" nesta planilha —
-// tenta preencher automaticamente quando a OF existe em uma única aba. Se a
-// OF existir em MAIS de uma aba (ambígua, como o caso DR Embalagem × RJ),
-// NÃO adivinha: avisa o operador pra ele reabrir a aba certa e tocar na OF
-// antes de gerar o romaneio, evitando repetir o erro de cliente trocado.
-function reconciliarPaletesSalvos() {
-  const ofsComPaletes = Object.keys(paletes).filter(k => paletes[k].length > 0);
-  const ambiguas = [];
-  const naoEncontradas = [];
-  let mudou = false;
-
-  ofsComPaletes.forEach(of => {
-    if (paletesInfo[of]) return;
-
-    const abasComEssaOf = Object.entries(clientesData)
-      .filter(([, lista]) => lista.some(o => o.of === of))
-      .map(([aba]) => aba);
-
-    if (abasComEssaOf.length === 1) {
-      const ordem = clientesData[abasComEssaOf[0]].find(o => o.of === of);
-      paletesInfo[of] = { ...ordem };
-      mudou = true;
-    } else if (abasComEssaOf.length > 1) {
-      ambiguas.push({ of, abas: abasComEssaOf });
-    } else {
-      naoEncontradas.push(of);
-    }
-  });
-
-  if (mudou) salvarPaletesInfoStorage();
-
-  if (ambiguas.length || naoEncontradas.length) {
-    let msg = '';
-    if (ambiguas.length) {
-      msg += '⚠ Estas OFs já têm paletes registrados e existem em MAIS DE UMA aba da planilha. Escolha a aba certa e toque na OF (mesmo sem lançar nada) antes de gerar o romaneio, pra corrigir os dados:\n\n';
-      msg += ambiguas.map(a => 'OF ' + a.of + '  →  ' + a.abas.join(' ou ')).join('\n');
-    }
-    if (naoEncontradas.length) {
-      if (msg) msg += '\n\n';
-      msg += '⚠ Estas OFs já têm paletes registrados mas não existem na planilha atual (provavelmente já expedidas em outro dia):\n\n';
-      msg += naoEncontradas.map(of => 'OF ' + of).join('\n');
-    }
-    alert(msg);
-  }
-}
-
-// ========== CARREGAR WORKBOOK (comum ao auto e ao manual) ==========
-// Cada aba do Excel = 1 cliente. Guarda as OFs de cada cliente e monta a lista.
-function carregarWorkbook(buf) {
-  workbook = XLSX.read(buf, { type: 'array', cellDates: true });
-  clientesData = {};
-  mapaOrdens = new Map();
-  todasOrdens = [];
-
-  for (const aba of workbook.SheetNames) {
-    const r = processarAba(workbook.Sheets[aba]);
-    if (r && r.length) {
-      clientesData[aba] = r;
-      r.forEach(o => {
-        if (!mapaOrdens.has(o.of)) mapaOrdens.set(o.of, o);
-        todasOrdens.push({ ...o, aba });
+  for (const p of lista) {
+    const of = String(p.of || '').trim();
+    if (!of) continue;
+    if (!estoquePorOf.has(of)) estoquePorOf.set(of, []);
+    estoquePorOf.get(of).push(p);
+    if (!infoPorOf.has(of)) {
+      infoPorOf.set(of, {
+        cliente: p.cliente || '',
+        oc: p.oc || '',
+        ofCentral: p.ofCentral || '',
+        tipoPapel: p.papelao || '',
+        medidaChapa: p.medida || '',
+        qtdePedido: parseFloat(p.qtdePedido) || 0,
       });
     }
   }
 
-  reconciliarPaletesSalvos();
+  for (const [of, info] of infoPorOf) {
+    const cli = info.cliente || '(sem cliente)';
+    if (!clientesData.has(cli)) clientesData.set(cli, []);
+    clientesData.get(cli).push(of);
+  }
+  for (const of of Object.keys(paletes)) reconciliarSelecao(of);
+}
 
-  const clientes = Object.keys(clientesData);
-  if (!clientes.length) return false;
-
-  const sel = document.getElementById('selCliente');
-  sel.innerHTML = '<option value="">— toque para escolher o cliente —</option>';
-  clientes.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c;
-    opt.textContent = c + '  ·  ' + clientesData[c].length + ' OF(s)';
-    sel.appendChild(opt);
-  });
-  document.getElementById('cardCliente').style.display = 'block';
-
-  // A busca por OP funciona em todas as abas de uma vez — não é preciso
-  // escolher cliente/aba antes. O card de busca já fica visível assim que a
-  // planilha carrega.
-  document.getElementById('cardOf').style.display = 'block';
-  return true;
+// Remove da seleção local qualquer palete que não esteja mais em estoque
+// (ex.: outro aparelho já deu baixa nele antes deste sincronizar).
+function reconciliarSelecao(of) {
+  const disponiveis = new Set((estoquePorOf.get(of) || []).map(p => String(p.numPalete)));
+  const lista = paletes[of] || [];
+  const filtrada = lista.filter(p => disponiveis.has(p.numStr));
+  if (filtrada.length !== lista.length) {
+    if (filtrada.length) paletes[of] = filtrada; else delete paletes[of];
+    salvarPaletesStorage();
+  }
 }
 
 // ========== AUTO-CARREGAR DO GITHUB ==========
-// Busca a programação publicada no repo-fonte único (controle-producao-etiquetas),
-// direto via raw.githubusercontent.com — não depende do build do GitHub Pages.
-// Cache-busting (?t=) + no-store para nunca pegar versão antiga em cache. NÃO
-// existe upload manual: o operador nunca tem o arquivo. Se falhar, mostra aviso
-// + "Tentar novamente".
-const XLSX_FONTE_URL = 'https://raw.githubusercontent.com/marcilianocamargo-stack/controle-producao-etiquetas/main/programacao-hoje.xlsx';
 async function autoCarregar() {
   const statusAuto    = document.getElementById('statusAuto');
   const btnRecarregar = document.getElementById('btnRecarregar');
@@ -796,27 +584,34 @@ async function autoCarregar() {
   btnRecarregar.style.display = 'none';
   statusAuto.className = 'arq-status info';
   statusAuto.style.display = 'block';
-  statusAuto.textContent = '⏳ Buscando a programação do dia...';
+  statusAuto.textContent = '⏳ Buscando o estoque atual...';
 
   try {
-    const resp = await fetch(XLSX_FONTE_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    const resp = await fetch(ESTOQUE_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!resp.ok) throw new Error('sem arquivo');
-    const buf = await resp.arrayBuffer();
-    if (!carregarWorkbook(buf)) throw new Error('sem OFs');
+    const dados = await resp.json();
+    const paletesEstoque = Array.isArray(dados.paletes) ? dados.paletes : [];
+    carregarEstoque(paletesEstoque);
+    if (!estoquePorOf.size) throw new Error('estoque vazio');
+
+    document.getElementById('cardOf').style.display = 'block';
+    document.getElementById('cardCliente').style.display = 'block';
 
     let quando = '';
-    const lm = resp.headers.get('last-modified');
-    if (lm) {
-      const d = new Date(lm);
+    if (dados.atualizadoEm) {
+      const d = new Date(dados.atualizadoEm);
       if (!isNaN(d.getTime()))
-        quando = ' · atualizada ' + d.toLocaleDateString('pt-BR') + ' ' +
+        quando = ' · atualizado ' + d.toLocaleDateString('pt-BR') + ' ' +
                  d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     }
     statusAuto.className = 'arq-status ok';
-    statusAuto.textContent = '✓ Programação do dia carregada' + quando;
+    statusAuto.textContent = '✓ Estoque carregado (' + paletesEstoque.length + ' palete(s))' + quando;
+    atualizarCardGerar();
+    atualizarBuscaPaletes();
+    if (ofAtual) { renderPaletesEstoque(); atualizarLista(); atualizarOfsPedido(); }
   } catch (err) {
     statusAuto.className = 'arq-status err';
-    statusAuto.textContent = '⚠ Nenhuma programação disponível ainda. Aguarde a publicação do dia e toque em "Tentar novamente".';
+    statusAuto.textContent = '⚠ Nenhum estoque disponível ainda. Aguarde a primeira produção do dia e toque em "Tentar novamente".';
     btnRecarregar.style.display = 'block';
   }
 }
@@ -828,107 +623,59 @@ function toggleVerPorCliente() {
   const abrir = conteudo.style.display === 'none';
   conteudo.style.display = abrir ? 'block' : 'none';
   btn.textContent = abrir ? '🔼  Ocultar lista por cliente' : '🔍  Não sabe o número? Ver lista por cliente';
+  if (abrir) {
+    const sel = document.getElementById('selCliente');
+    sel.innerHTML = '<option value="">— toque para escolher o cliente —</option>';
+    [...clientesData.keys()].sort().forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c + '  ·  ' + clientesData.get(c).length + ' OP(s)';
+      sel.appendChild(opt);
+    });
+  }
 }
 
 function selecionarCliente() {
-  const aba = document.getElementById('selCliente').value;
+  const cli = document.getElementById('selCliente').value;
   const selOf = document.getElementById('selOf');
   selOf.style.display = 'none';
   selOf.value = '';
-  if (!aba) return;
+  if (!cli) return;
 
-  preencherSelect(clientesData[aba] || [], aba);
+  selOf.innerHTML = '<option value="">— toque para escolher a OP —</option>';
+  (clientesData.get(cli) || []).forEach(of => {
+    const opt = document.createElement('option');
+    opt.value = of;
+    opt.textContent = 'OP ' + of;
+    selOf.appendChild(opt);
+  });
   selOf.style.display = 'block';
 }
 
-// ========== SELECT DE OF (dentro de "Ver por cliente") ==========
-function preencherSelect(lista, aba) {
-  const sel = document.getElementById('selOf');
-  sel.dataset.aba = aba || '';
-  sel.innerHTML = '<option value="">— toque para escolher a OP —</option>';
-  lista.forEach(o => {
-    const opt = document.createElement('option');
-    opt.value = o.of;
-    opt.textContent = 'OF ' + o.of + (o.cliente ? '  ·  ' + o.cliente : '');
-    sel.appendChild(opt);
-  });
-}
-
 function selecionarOfDoSelect() {
-  const sel = document.getElementById('selOf');
-  const of = sel.value;
+  const of = document.getElementById('selOf').value;
   if (!of) return;
-  const aba = sel.dataset.aba;
-  const ordem = (clientesData[aba] || []).find(o => o.of === of);
-  if (!ordem) return;
   document.getElementById('buscaOf').value = '';
   document.getElementById('alertaOf').style.display = 'none';
-  esconderEscolhaAmbigua();
-  ativarOf({ ...ordem, aba });
+  ativarOf(of);
 }
 
-// ========== BUSCA GLOBAL DE OP (em todas as abas/UFs de uma vez) ==========
-// Retorna as ocorrências de uma OF idênticas em CLIENTE/OC/MEDIDA descartadas
-// (dedup), pra não tratar como "ambíguo" quando é só a mesma ordem repetida.
-function distintasPorDados(lista) {
-  const out = [];
-  lista.forEach(o => {
-    const existe = out.some(d => d.cliente === o.cliente && d.oc === o.oc && d.medidaChapa === o.medidaChapa);
-    if (!existe) out.push(o);
-  });
-  return out;
-}
-
-function esconderEscolhaAmbigua() {
-  document.getElementById('escolhaAmbigua').style.display = 'none';
-}
-
-function mostrarEscolhaAmbigua(matches) {
-  const div = document.getElementById('escolhaAmbigua');
-  div.innerHTML = '<div class="msg err" style="display:block;margin-top:0">⚠ Esta OP existe em mais de uma aba com dados diferentes. Toque na correta:</div>'
-    + matches.map(o => {
-        const desc = [o.cliente, o.medidaChapa].filter(Boolean).join(' · ');
-        return '<button type="button" class="btn btn-outline" style="margin-top:8px;text-align:left" onclick="ativarOfAmbigua(\'' + esc(o.of) + '\',\'' + esc(o.aba) + '\')">'
-             + esc(o.aba) + (desc ? ' — ' + esc(desc) : '') + '</button>';
-      }).join('');
-  div.style.display = 'block';
-}
-
-function ativarOfAmbigua(of, aba) {
-  const ordem = todasOrdens.find(o => o.of === of && o.aba === aba);
-  if (!ordem) return;
-  esconderEscolhaAmbigua();
-  ativarOf(ordem);
-}
-
+// ========== BUSCA POR OP ==========
 function filtrarOf() {
   const busca = document.getElementById('buscaOf').value.trim();
   const alerta = document.getElementById('alertaOf');
-  esconderEscolhaAmbigua();
   if (!busca) {
     alerta.style.display = 'none';
     document.getElementById('infoOf').style.display = 'none';
     document.getElementById('cardPalete').style.display = 'none';
     return;
   }
-
-  // Só auto-seleciona quando o número digitado é EXATAMENTE o de uma OF —
-  // buscando em TODAS as abas/UFs, não só na do cliente escolhido.
-  const exatas = distintasPorDados(todasOrdens.filter(o => o.of === busca));
-  if (exatas.length === 1) {
+  if (estoquePorOf.has(busca)) {
     alerta.style.display = 'none';
-    ativarOf(exatas[0]);
+    ativarOf(busca);
     return;
   }
-  if (exatas.length > 1) {
-    document.getElementById('infoOf').style.display = 'none';
-    document.getElementById('cardPalete').style.display = 'none';
-    mostrarEscolhaAmbigua(exatas);
-    return;
-  }
-
-  // Nenhuma OF com esse número em nenhuma aba → alerta
-  alerta.textContent = '⚠ Nenhuma OP com esse número. Confira o número.';
+  alerta.textContent = '⚠ Nenhuma OP com esse número em estoque. Confira o número ou se já foi tudo expedido.';
   alerta.style.display = 'block';
   document.getElementById('infoOf').style.display = 'none';
   document.getElementById('cardPalete').style.display = 'none';
@@ -937,7 +684,6 @@ function filtrarOf() {
 function limparBusca() {
   document.getElementById('buscaOf').value = '';
   document.getElementById('alertaOf').style.display = 'none';
-  esconderEscolhaAmbigua();
   document.getElementById('infoOf').style.display = 'none';
   document.getElementById('cardPalete').style.display = 'none';
   document.getElementById('cardLista').style.display = 'none';
@@ -947,113 +693,94 @@ function limparBusca() {
   atualizarBuscaPaletes();
 }
 
-// ========== ATIVAR OF (achada pela busca global, pela lista por cliente ou por um chip) ==========
-function ativarOf(ordem) {
-  ofAtual = ordem;
-  abaAtual = ordem.aba;
-  ordens = clientesData[abaAtual] || [ordem];
-  if (!paletes[ordem.of]) paletes[ordem.of] = [];
-
-  // Grava o snapshot desta OF (cliente/medida/pedido tal como exibidos agora
-  // nesta aba). É esse snapshot que será usado no romaneio final, mesmo que
-  // o mesmo nº de OF exista (por engano) em outra aba da planilha.
-  paletesInfo[ordem.of] = { ...ordem };
-  salvarPaletesInfoStorage();
+// ========== ATIVAR OP ==========
+function ativarOf(of) {
+  if (!estoquePorOf.has(of)) return;
+  ofAtual = of;
+  const info = infoPorOf.get(of) || {};
 
   let html = '';
-  if (ordem.cliente) html += '<div class="info-linha">Cliente: <strong>' + esc(ordem.cliente) + '</strong></div>';
-  if (ordem.oc && ordem.oc !== '' && ordem.oc !== '0') html += '<div class="info-linha">OC: <strong>' + esc(ordem.oc) + '</strong></div>';
-  if (ordem.medidaChapa) html += '<div class="info-linha">Medida: <strong>' + esc(ordem.medidaChapa) + '</strong></div>';
-  if (ordem.qtdePedido) html += '<div class="info-linha">Qtde do Pedido: <strong>' + fmt(ordem.qtdePedido) + ' chapas</strong></div>';
+  if (info.cliente) html += '<div class="info-linha">Cliente: <strong>' + esc(info.cliente) + '</strong></div>';
+  if (info.oc && info.oc !== '0') html += '<div class="info-linha">OC: <strong>' + esc(info.oc) + '</strong></div>';
+  if (info.medidaChapa) html += '<div class="info-linha">Medida: <strong>' + esc(info.medidaChapa) + '</strong></div>';
+  if (info.qtdePedido) html += '<div class="info-linha">Qtde do Pedido: <strong>' + fmt(info.qtdePedido) + ' chapas</strong></div>';
 
   document.getElementById('infoOfBody').innerHTML = html || '<div class="info-linha" style="color:#999">Sem dados adicionais</div>';
-  document.getElementById('infoOf').style.display     = 'block';
-  document.getElementById('cardPalete').style.display  = 'block';
-  document.getElementById('numPalete').value = '';
-  document.getElementById('qtdPalete').value = '';
-  document.getElementById('msgPalete').style.display = 'none';
+  document.getElementById('infoOf').style.display    = 'block';
+  document.getElementById('cardPalete').style.display = 'block';
 
-  setTimeout(() => {
-    document.getElementById('numPalete').focus();
-    document.getElementById('cardPalete').scrollIntoView({ behavior:'smooth', block:'nearest' });
-  }, 80);
+  setTimeout(() => document.getElementById('cardPalete').scrollIntoView({ behavior:'smooth', block:'nearest' }), 80);
 
+  renderPaletesEstoque();
   atualizarLista();
   atualizarCardGerar();
   atualizarOfsPedido();
   atualizarBuscaPaletes();
 }
 
-// Seleciona uma OF a partir de um chip da lista "OFs do pedido" (atalho, sem digitar)
 function selecionarOfChip(of) {
-  const ordem = ordens.find(o => o.of === of);
-  if (!ordem) return;
   document.getElementById('buscaOf').value = '';
   document.getElementById('alertaOf').style.display = 'none';
-  esconderEscolhaAmbigua();
-  ativarOf({ ...ordem, aba: abaAtual });
+  ativarOf(of);
 }
 
-// ========== TECLADO ==========
-function teclaNumPalete(e) {
-  if (e.key === 'Enter' || e.key === 'Tab') {
-    e.preventDefault();
-    document.getElementById('qtdPalete').focus();
-    document.getElementById('qtdPalete').select();
+// ========== LISTA DE PALETES EM ESTOQUE (tocar pra marcar/desmarcar) ==========
+function renderPaletesEstoque() {
+  const div = document.getElementById('listaPaletesEstoque');
+  if (!ofAtual) { div.innerHTML = ''; return; }
+  const disponiveis = (estoquePorOf.get(ofAtual) || [])
+    .slice()
+    .sort((a, b) => parseInt(a.numPalete, 10) - parseInt(b.numPalete, 10));
+  if (!disponiveis.length) {
+    div.innerHTML = '<div class="lista-vazia">Nenhum palete desta OP em estoque</div>';
+    return;
   }
-}
-function teclaQtd(e) {
-  if (e.key === 'Enter') { e.preventDefault(); salvarPalete(); }
+  const selecionados = new Set((paletes[ofAtual] || []).map(p => p.numStr));
+  div.innerHTML = disponiveis.map(p => {
+    const marcado = selecionados.has(String(p.numPalete));
+    const detalhes = [fmt(p.chapas) + ' chapas', p.peso ? fmtKg(p.peso) + ' kg' : null].filter(Boolean).join(' · ');
+    return '<div class="palete-item' + (marcado ? ' marcado' : '') + '" onclick="toggleSelecaoPalete(\'' + esc(String(p.numPalete)) + '\')">'
+         + '<div><div class="pi-num">' + (marcado ? '☑' : '☐') + '&nbsp; Palete ' + esc(String(p.numPalete)) + '</div>'
+         + '<div class="pi-qtd">' + detalhes + '</div></div>'
+         + '</div>';
+  }).join('');
 }
 
-// ========== SALVAR PALETE ==========
-function salvarPalete() {
+function toggleSelecaoPalete(numStr) {
   if (!ofAtual) return;
-  const numRaw = document.getElementById('numPalete').value.trim();
-  const qtdRaw = document.getElementById('qtdPalete').value.trim();
-  const num = parseInt(numRaw), qtd = parseInt(qtdRaw);
-
-  if (!numRaw || isNaN(num) || num < 1) {
-    mostrarMsgPalete('⚠ Informe o número do palete!', 'err');
-    document.getElementById('numPalete').focus(); return;
-  }
-  if (!qtdRaw || isNaN(qtd) || qtd < 1) {
-    mostrarMsgPalete('⚠ Informe a quantidade de chapas!', 'err');
-    document.getElementById('qtdPalete').focus(); return;
-  }
-
-  if (!paletes[ofAtual.of]) paletes[ofAtual.of] = [];
-  const listaOf = paletes[ofAtual.of];
-  const idx = listaOf.findIndex(p => p.num === num);
+  const registro = (estoquePorOf.get(ofAtual) || []).find(p => String(p.numPalete) === numStr);
+  if (!registro) return;
+  if (!paletes[ofAtual]) paletes[ofAtual] = [];
+  const lista = paletes[ofAtual];
+  const idx = lista.findIndex(p => p.numStr === numStr);
   if (idx !== -1) {
-    if (!confirm('PALETE ' + String(num).padStart(2,'0') + ' já registrado com ' + fmt(listaOf[idx].qtd) + ' chapas.\n\nDeseja substituir?'))
-      { document.getElementById('numPalete').focus(); return; }
-    listaOf.splice(idx, 1);
+    lista.splice(idx, 1);
+  } else {
+    lista.push({
+      num: parseInt(numStr, 10) || 0,
+      numStr,
+      qtd: Number(registro.chapas) || 0,
+      peso: Number(registro.peso) || 0,
+    });
+    lista.sort((a, b) => a.num - b.num);
   }
-
-  listaOf.push({ num, qtd });
-  listaOf.sort((a, b) => a.num - b.num);
-
-  document.getElementById('numPalete').value = '';
-  document.getElementById('qtdPalete').value = '';
-  document.getElementById('msgPalete').style.display = 'none';
-  mostrarFlash('✓  Palete ' + String(num).padStart(2,'0') + '\n' + fmt(qtd) + ' chapas');
-  setTimeout(() => document.getElementById('numPalete').focus(), 80);
   salvarPaletesStorage();
+  renderPaletesEstoque();
   atualizarLista();
   atualizarCardGerar();
   atualizarOfsPedido();
   atualizarBuscaPaletes();
 }
 
-// ========== LISTA ==========
+// ========== LISTA (barra de total) ==========
 function atualizarLista() {
   if (!ofAtual) return;
-  const lista = paletes[ofAtual.of] || [];
+  const lista = paletes[ofAtual] || [];
   document.getElementById('cardLista').style.display = 'block';
 
   const totalProd = lista.reduce((s, p) => s + p.qtd, 0);
-  const qtdPedido = ofAtual.qtdePedido || 0;
+  const info = infoPorOf.get(ofAtual) || {};
+  const qtdPedido = info.qtdePedido || 0;
   const bar = document.getElementById('totalBar');
   document.getElementById('totalProd').textContent = fmt(totalProd);
 
@@ -1069,25 +796,26 @@ function atualizarLista() {
   }
 }
 
-// ========== OFs DO PEDIDO (chips coloridos) ==========
-// Mostra todas as OFs do cliente selecionado com status por cor, pra dar uma
-// visão rápida de quais já estão perto/no ponto/estouradas — sem atrapalhar
-// a digitação (fica embaixo do formulário de lançamento).
+// ========== OPs DO MESMO CLIENTE (chips coloridos) ==========
 function atualizarOfsPedido() {
   const card = document.getElementById('cardOfsPedido');
   const wrap = document.getElementById('ofsPedidoWrap');
-  if (!ordens || !ordens.length) { card.style.display = 'none'; return; }
+  if (!ofAtual) { card.style.display = 'none'; return; }
+  const info = infoPorOf.get(ofAtual) || {};
+  const ofsDoCliente = clientesData.get(info.cliente || '(sem cliente)') || [ofAtual];
+  if (ofsDoCliente.length < 2) { card.style.display = 'none'; return; }
   card.style.display = 'block';
-  wrap.innerHTML = ordens.map(o => {
-    const lista = paletes[o.of] || [];
+  wrap.innerHTML = ofsDoCliente.map(of => {
+    const infoOf = infoPorOf.get(of) || {};
+    const lista = paletes[of] || [];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
-    const pedido = o.qtdePedido || 0;
+    const pedido = infoOf.qtdePedido || 0;
     const st = statusPedido(total, pedido) || 'verde';
-    const sel = ofAtual && ofAtual.of === o.of ? ' selecionado' : '';
-    const desc = [o.medidaChapa || o.medida, o.tipoPapel].filter(Boolean).join(' · ');
+    const sel = ofAtual === of ? ' selecionado' : '';
+    const desc = infoOf.medidaChapa || '';
     const pct = pedido > 0 ? Math.min(100, (total / pedido) * 100) : 0;
-    return '<div class="of-chip ' + st + sel + '" onclick="selecionarOfChip(\'' + o.of + '\')">'
-         + '<div class="of-chip-top"><span class="dot"></span>OP ' + esc(o.of) + '</div>'
+    return '<div class="of-chip ' + st + sel + '" onclick="selecionarOfChip(\'' + esc(of) + '\')">'
+         + '<div class="of-chip-top"><span class="dot"></span>OP ' + esc(of) + '</div>'
          + (desc ? '<div class="of-chip-desc">' + esc(desc) + '</div>' : '')
          + '<div class="of-chip-bar"><div class="of-chip-fill" style="width:' + pct + '%"></div></div>'
          + '<div class="of-chip-qtd">' + fmt(total) + ' / ' + fmt(pedido) + '</div>'
@@ -1095,13 +823,10 @@ function atualizarOfsPedido() {
   }).join('');
 }
 
-// ========== CONSULTAR / EXCLUIR PALETES (chips, qualquer OF/cliente já lançado) ==========
-// Fica OCULTA por padrão pra não confundir o operador — só aparece atrás de um
-// botão. Ao abrir: toca no chip da OF pra ver os paletes dela, toca no palete
-// pra revelar o botão de excluir.
-let buscaPaletesVisivel = false; // conteúdo (chips + paletes) só some/aparece nesse botão
-let ofBuscaAberta   = null;      // OF atualmente expandida nesta seção
-let paleteBuscaAberto = null;    // { of, num } com o botão excluir revelado
+// ========== VER TODOS OS PALETES SELECIONADOS (qualquer OP já tocada) ==========
+let buscaPaletesVisivel = false;
+let ofBuscaAberta   = null;
+let paleteBuscaAberto = null;
 
 function toggleBuscaPaletesVisivel() {
   buscaPaletesVisivel = !buscaPaletesVisivel;
@@ -1125,22 +850,20 @@ function atualizarBuscaPaletes() {
   }
   card.style.display = 'block';
   conteudo.style.display = buscaPaletesVisivel ? 'block' : 'none';
-  btn.textContent = buscaPaletesVisivel ? '🔼  Ocultar consulta de paletes' : '🔍  Consultar / Excluir Paletes';
+  btn.textContent = buscaPaletesVisivel ? '🔼  Ocultar lista' : '🔍  Ver todos os paletes selecionados';
   if (!buscaPaletesVisivel) return;
 
   if (ofBuscaAberta && !ofs.includes(ofBuscaAberta)) { ofBuscaAberta = null; paleteBuscaAberto = null; }
 
-  // Cada chip mostra seu resumo normalmente; a OF aberta expande e mostra os
-  // paletes DENTRO do próprio chip (não numa área separada embaixo da grade).
   wrap.innerHTML = ofs.map(ofNum => {
-    const ord = resolverOrdem(ofNum);
+    const info = infoPorOf.get(ofNum) || {};
     const lista = paletes[ofNum] || [];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
-    const pedido = ord ? (ord.qtdePedido || 0) : 0;
+    const pedido = info.qtdePedido || 0;
     const st = statusPedido(total, pedido) || 'verde';
     const aberta = ofBuscaAberta === ofNum;
     const pct = pedido > 0 ? Math.min(100, (total / pedido) * 100) : 0;
-    const desc = ord && ord.cliente ? ord.cliente : '';
+    const desc = info.cliente || '';
 
     const corpo = '<div class="of-chip-top"><span class="dot"></span>OP ' + esc(ofNum) + '</div>'
          + (desc ? '<div class="of-chip-desc">' + esc(desc) + '</div>' : '')
@@ -1148,23 +871,23 @@ function atualizarBuscaPaletes() {
          + '<div class="of-chip-qtd">' + fmt(total) + ' / ' + fmt(pedido) + '</div>';
 
     if (!aberta) {
-      return '<div class="of-chip ' + st + '" onclick="toggleBuscaOf(\'' + ofNum + '\')">' + corpo + '</div>';
+      return '<div class="of-chip ' + st + '" onclick="toggleBuscaOf(\'' + esc(ofNum) + '\')">' + corpo + '</div>';
     }
 
     const paletesHtml = lista.length === 0
-      ? '<div class="lista-vazia">Nenhum palete nesta OF</div>'
+      ? '<div class="lista-vazia">Nenhum palete selecionado nesta OP</div>'
       : lista.map(p => {
-          const pAberto = paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.num === p.num;
-          return '<div class="palete-item' + (pAberto ? ' aberto' : '') + '" onclick="togglePaleteBusca(\'' + ofNum + '\', ' + p.num + ')">'
-               + '<div><div class="pi-num">Palete ' + String(p.num).padStart(2, '0') + '</div><div class="pi-qtd">' + fmt(p.qtd) + ' chapas</div></div>'
-               + (pAberto ? '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + ofNum + '\', ' + p.num + ')">✕&nbsp;&nbsp;Excluir este palete</button>' : '')
+          const pAberto = paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.numStr === p.numStr;
+          return '<div class="palete-item marcado' + (pAberto ? ' aberto' : '') + '" onclick="togglePaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.numStr) + '\')">'
+               + '<div><div class="pi-num">Palete ' + esc(p.numStr) + '</div><div class="pi-qtd">' + fmt(p.qtd) + ' chapas</div></div>'
+               + (pAberto ? '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.numStr) + '\')">✕&nbsp;&nbsp;Desmarcar este palete</button>' : '')
                + '</div>';
         }).join('');
 
-    return '<div class="of-chip ' + st + ' selecionado expandido" onclick="toggleBuscaOf(\'' + ofNum + '\')">'
+    return '<div class="of-chip ' + st + ' selecionado expandido" onclick="toggleBuscaOf(\'' + esc(ofNum) + '\')">'
          + corpo
          + '<div class="of-chip-paletes" onclick="event.stopPropagation()">'
-         + '<div class="lista-tit" style="margin-top:12px">Paletes desta OF</div>'
+         + '<div class="lista-tit" style="margin-top:12px">Paletes selecionados desta OP</div>'
          + paletesHtml
          + '</div>'
          + '</div>';
@@ -1177,25 +900,23 @@ function toggleBuscaOf(ofNum) {
   atualizarBuscaPaletes();
 }
 
-function togglePaleteBusca(ofNum, num) {
-  paleteBuscaAberto = (paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.num === num) ? null : { of: ofNum, num };
+function togglePaleteBusca(ofNum, numStr) {
+  paleteBuscaAberto = (paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.numStr === numStr) ? null : { of: ofNum, numStr };
   atualizarBuscaPaletes();
 }
 
-function removerPaleteBusca(ofNum, num) {
-  if (!confirm('Remover Palete ' + String(num).padStart(2, '0') + ' da OF ' + ofNum + '?')) return;
-  paletes[ofNum] = (paletes[ofNum] || []).filter(p => p.num !== num);
+function removerPaleteBusca(ofNum, numStr) {
+  if (!confirm('Desmarcar Palete ' + numStr + ' da OP ' + ofNum + '?')) return;
+  paletes[ofNum] = (paletes[ofNum] || []).filter(p => p.numStr !== numStr);
   salvarPaletesStorage();
   paleteBuscaAberto = null;
-  if (ofAtual && ofAtual.of === ofNum) atualizarLista();
+  if (ofAtual === ofNum) { renderPaletesEstoque(); atualizarLista(); }
   atualizarCardGerar();
   atualizarOfsPedido();
   atualizarBuscaPaletes();
 }
 
 // ========== CARD GERAR ==========
-// O resumo (paletes por OF) fica OCULTO por padrão atrás de um botão, pra não
-// confundir o operador com dados que ele não precisa ver pra baixar o Excel.
 let resumoGerarVisivel = false;
 
 function toggleResumoGerarVisivel() {
@@ -1215,12 +936,12 @@ function atualizarCardGerar() {
   if (!resumoGerarVisivel) return;
 
   resumoDiv.innerHTML = ofs.map(ofNum => {
-    const ord = resolverOrdem(ofNum);
+    const info = infoPorOf.get(ofNum) || {};
     const lista = paletes[ofNum];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
-    const ped = ord ? ord.qtdePedido : 0;
+    const ped = info.qtdePedido || 0;
     return `<div class="resumo-item">
-      <div class="ri-tit">OP ${ofNum}${ord && ord.cliente ? '  ·  ' + esc(ord.cliente) : ''}</div>
+      <div class="ri-tit">OP ${esc(ofNum)}${info.cliente ? '  ·  ' + esc(info.cliente) : ''}</div>
       <div class="ri-det">${lista.length} palete(s) &nbsp;·&nbsp; ${fmt(total)} chapas${ped ? ' &nbsp;·&nbsp; Pedido: ' + fmt(ped) : ''}</div>
     </div>`;
   }).join('');
@@ -1230,7 +951,6 @@ function novaOf() {
   ofAtual = null;
   document.getElementById('buscaOf').value = '';
   document.getElementById('alertaOf').style.display = 'none';
-  esconderEscolhaAmbigua();
   document.getElementById('infoOf').style.display = 'none';
   document.getElementById('cardPalete').style.display = 'none';
   document.getElementById('cardLista').style.display = 'none';
@@ -1240,22 +960,36 @@ function novaOf() {
   setTimeout(() => document.getElementById('cardOf').scrollIntoView({ behavior:'smooth', block:'start' }), 80);
 }
 
-// Apaga do aparelho todos os paletes já lançados (todas as OFs/clientes).
-// Só deve ser usado DEPOIS de já ter baixado e conferido o Excel do romaneio.
 function apagarDadosSalvos() {
   const temDados = Object.keys(paletes).some(k => paletes[k].length > 0);
   if (!temDados) return;
-  if (!confirm('Isso vai apagar TODOS os paletes já lançados (de todas as OFs e clientes), inclusive os salvos no aparelho.\n\nUse isso só DEPOIS de já ter baixado e conferido o Excel do romaneio.\n\nTem certeza que quer apagar tudo?')) return;
+  if (!confirm('Isso vai apagar a seleção de TODOS os paletes deste romaneio (de todas as OPs), só neste aparelho.\n\nUse isso só DEPOIS de já ter baixado e conferido o Excel do romaneio.\n\nTem certeza que quer apagar tudo?')) return;
   paletes = {};
   try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-  atualizarLista();
+  document.getElementById('cardLista').style.display = 'none';
+  renderPaletesEstoque();
   atualizarCardGerar();
   atualizarOfsPedido();
   atualizarBuscaPaletes();
-  mostrarFlash('🗑  Dados apagados');
+  mostrarFlash('🗑  Seleção apagada');
 }
 
 function limparNomeArquivo(s){return String(s||'').trim().replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,'_');}
+
+// ========== DAR BAIXA NO ESTOQUE (fire-and-forget, nao trava o download) ==========
+function darBaixaEstoque(ofs) {
+  const itens = [];
+  ofs.forEach(ofNum => {
+    (paletes[ofNum] || []).forEach(p => itens.push({ of: ofNum, numPalete: p.numStr }));
+  });
+  if (!itens.length) return;
+  fetch(SAIDA_WEBHOOK_URL, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ itens }),
+    keepalive: true
+  }).catch(()=>{});
+}
 
 // ========== GERAR EXCEL ==========
 function gerarExcel() {
@@ -1277,10 +1011,10 @@ function _gerarEBaixarExcel(ofs) {
     ['Cliente','OP','OF','OC','Medida Chapa (L × C)','Nº Palete','Qtde Palete','Qtde Pedido']
   ];
   ofs.forEach(ofNum => {
-    const ord = resolverOrdem(ofNum);
+    const info = infoPorOf.get(ofNum) || {};
     paletes[ofNum].forEach(p => romData.push([
-      ord ? ord.cliente : '', ofNum, ord ? ord.ofCentral||'' : '', ord ? ord.oc : '', ord ? ord.medidaChapa : '',
-      p.num, p.qtd, ord && ord.qtdePedido ? ord.qtdePedido : ''
+      info.cliente || '', ofNum, info.ofCentral || '', info.oc || '', info.medidaChapa || '',
+      p.numStr, p.qtd, info.qtdePedido || ''
     ]));
   });
   const wsRom = XLSX.utils.aoa_to_sheet(romData);
@@ -1289,20 +1023,20 @@ function _gerarEBaixarExcel(ofs) {
 
   const resData = [
     ['RESUMO POR ORDEM DE PRODUÇÃO'], [],
-    ['OP','OF','Cliente','OC','Tipo de Papel','Medida (L × C)','Qtde Pedido','Total Produzido','Saldo','Nº de Paletes']
+    ['OP','OF','Cliente','OC','Tipo de Papel','Medida (L × C)','Qtde Pedido','Total Expedido','Saldo','Nº de Paletes']
   ];
   ofs.forEach(ofNum => {
-    const ord = resolverOrdem(ofNum);
+    const info = infoPorOf.get(ofNum) || {};
     const lista = paletes[ofNum];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
-    const ped = ord ? ord.qtdePedido : 0;
+    const ped = info.qtdePedido || 0;
     resData.push([
       ofNum,
-      ord ? ord.ofCentral||'' : '',
-      ord ? ord.cliente : '',
-      ord ? ord.oc : '',
-      ord ? ord.tipoPapel : '',
-      ord ? ord.medidaChapa : '',
+      info.ofCentral || '',
+      info.cliente || '',
+      info.oc || '',
+      info.tipoPapel || '',
+      info.medidaChapa || '',
       ped || '',
       total,
       ped ? (ped - total) : '',
@@ -1315,25 +1049,18 @@ function _gerarEBaixarExcel(ofs) {
 
   const data = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
   const nomesClientes = [...new Set(ofs.map(ofNum => {
-    const ord = resolverOrdem(ofNum);
-    return ord && ord.cliente ? limparNomeArquivo(ord.cliente) : '';
+    const info = infoPorOf.get(ofNum);
+    return info && info.cliente ? limparNomeArquivo(info.cliente) : '';
   }).filter(Boolean))];
   const clientesPart = nomesClientes.length
     ? '_'+(nomesClientes.length>3 ? nomesClientes.slice(0,3).join('-')+'+'+(nomesClientes.length-3) : nomesClientes.join('-'))
     : '';
   XLSX.writeFile(wb, 'Romaneio_'+data+clientesPart+'.xlsx');
-  mostrarFlash('✓  Romaneio baixado!');
+  darBaixaEstoque(ofs);
+  mostrarFlash('✓  Romaneio baixado e baixa registrada!');
 }
 
 // ========== FEEDBACKS ==========
-function mostrarMsgPalete(txt, tipo) {
-  const el = document.getElementById('msgPalete');
-  el.textContent = txt;
-  el.className = 'msg ' + tipo;
-  el.style.display = 'block';
-  clearTimeout(el._t);
-  el._t = setTimeout(() => { el.style.display = 'none'; }, 3500);
-}
 function mostrarFlash(txt) {
   const overlay = document.getElementById('flashOverlay');
   const box = document.getElementById('flashBox');
@@ -1346,8 +1073,6 @@ function mostrarFlash(txt) {
 
 // ========== INICIALIZAÇÃO ==========
 autoCarregar();
-// Se já houver paletes salvos no aparelho (ex.: recarregou a página no meio do
-// romaneio), mostra "Gerar Romaneio" e "Consultar/Excluir Paletes" desde já.
 atualizarCardGerar();
 atualizarBuscaPaletes();
 </script>
