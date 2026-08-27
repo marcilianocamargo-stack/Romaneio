@@ -432,6 +432,11 @@ input.inp-grande {
     </div>
   </div>
 
+  <div class="card" id="cardOc" style="display:none">
+    <div class="step-title" style="margin-bottom:10px">⚠ Esta OP tem mais de um pedido — escolha qual:</div>
+    <div id="listaOcs"></div>
+  </div>
+
   <div class="card" id="cardPalete" style="display:none">
     <div class="step-title"><span class="step-num" id="numPassoPalete">2</span>Toque nos paletes que vão neste romaneio</div>
     <p style="font-size:14px;color:#888;margin-bottom:14px">Só aparece o que realmente está em estoque para essa OP.</p>
@@ -501,9 +506,12 @@ const ESTOQUE_URL = 'https://raw.githubusercontent.com/marcilianocamargo-stack/c
 const SAIDA_WEBHOOK_URL = 'https://n8n.mcamargo.uk/webhook/saida-estoque';
 
 let estoquePorOf  = new Map();  // of -> [{numPalete, chapas, peso, medida, ...}] (paletes reais em estoque)
-let infoPorOf     = new Map();  // of -> {cliente, oc, ofCentral, tipoPapel, medidaChapa, qtdePedido}
+let infoPorOf     = new Map();  // of -> {cliente} (resumo geral, cliente é igual entre OCs da mesma OP)
+let infoPorOc     = new Map();  // "of|oc" -> {cliente, oc, ofCentral, tipoPapel, medidaChapa, qtdePedido}
+let ocsPorOf      = new Map();  // of -> [oc1, oc2, ...] distintas
 let clientesData  = new Map();  // cliente -> [ofs...] (só pra navegação "ver por cliente")
 let ofAtual  = null;
+let ocAtual  = null;  // OC ativa dentro da OP, só usada quando a OP tem mais de uma
 let paletes  = carregarPaletesSalvos();  // { of: [{chave, num, numStr, qtd, peso}] } -- selecionados NESTE romaneio, persistido no aparelho
 
 // Identidade de um palete em estoque. Normalmente numPalete já seria único
@@ -542,22 +550,36 @@ function statusPedido(total, pedido) {
 }
 
 // ========== CARREGAR ESTOQUE ==========
+// Uma mesma OP pode legitimamente ter mais de um pedido (OC) dentro dela --
+// cada OC com sua própria medida/qtde pedido. infoPorOf guarda um resumo
+// "geral" (cliente é sempre igual entre as OCs da mesma OP, então serve pra
+// navegação por cliente); infoPorOc guarda o detalhe POR OC, que é o que
+// realmente precisa ser mostrado certo pro operador na hora de gerar o
+// romaneio -- misturar OCs diferentes foi exatamente o bug do Romaneio
+// antigo (ficava só com a de maior quantidade e descartava a outra).
 function carregarEstoque(lista) {
   estoquePorOf = new Map();
   infoPorOf = new Map();
+  infoPorOc = new Map();   // "of|oc" -> {cliente, oc, ofCentral, tipoPapel, medidaChapa, qtdePedido}
+  ocsPorOf = new Map();    // of -> [oc1, oc2, ...] (distintas, na ordem em que apareceram)
   clientesData = new Map();
   const contagemChave = {};
 
   for (const p of lista) {
     const of = String(p.of || '').trim();
     if (!of) continue;
+    const oc = String(p.oc || '').trim();
     const base = of + '|' + p.numPalete + '|' + p.chapas + '|' + p.peso;
     contagemChave[base] = (contagemChave[base] || 0) + 1;
     p.chave = base + '#' + contagemChave[base];
     if (!estoquePorOf.has(of)) estoquePorOf.set(of, []);
     estoquePorOf.get(of).push(p);
-    if (!infoPorOf.has(of)) {
-      infoPorOf.set(of, {
+
+    if (!infoPorOf.has(of)) infoPorOf.set(of, { cliente: p.cliente || '' });
+
+    const chaveOc = of + '|' + oc;
+    if (!infoPorOc.has(chaveOc)) {
+      infoPorOc.set(chaveOc, {
         cliente: p.cliente || '',
         oc: p.oc || '',
         ofCentral: p.ofCentral || '',
@@ -566,6 +588,8 @@ function carregarEstoque(lista) {
         qtdePedido: parseFloat(p.qtdePedido) || 0,
       });
     }
+    if (!ocsPorOf.has(of)) ocsPorOf.set(of, []);
+    if (!ocsPorOf.get(of).includes(oc)) ocsPorOf.get(of).push(oc);
   }
 
   for (const [of, info] of infoPorOf) {
@@ -574,6 +598,12 @@ function carregarEstoque(lista) {
     clientesData.get(cli).push(of);
   }
   for (const of of Object.keys(paletes)) reconciliarSelecao(of);
+}
+
+// Info do pedido ativo (OP + OC quando a OP tiver mais de um).
+function infoAtual() {
+  if (!ofAtual) return {};
+  return infoPorOc.get(ofAtual + '|' + (ocAtual || '')) || {};
 }
 
 // Remove da seleção local qualquer palete que não esteja mais em estoque
@@ -696,10 +726,12 @@ function filtrarOf() {
 function limparBusca() {
   document.getElementById('buscaOf').value = '';
   document.getElementById('alertaOf').style.display = 'none';
+  document.getElementById('cardOc').style.display = 'none';
   document.getElementById('infoOf').style.display = 'none';
   document.getElementById('cardPalete').style.display = 'none';
   document.getElementById('cardLista').style.display = 'none';
   ofAtual = null;
+  ocAtual = null;
   atualizarCardGerar();
   atualizarOfsPedido();
   atualizarBuscaPaletes();
@@ -709,8 +741,44 @@ function limparBusca() {
 function ativarOf(of) {
   if (!estoquePorOf.has(of)) return;
   ofAtual = of;
-  const info = infoPorOf.get(of) || {};
+  ocAtual = null;
+  document.getElementById('cardOc').style.display = 'none';
+  document.getElementById('infoOf').style.display = 'none';
+  document.getElementById('cardPalete').style.display = 'none';
 
+  const ocs = ocsPorOf.get(of) || [];
+  if (ocs.length > 1) {
+    renderEscolhaOc(of, ocs);
+    document.getElementById('cardOc').style.display = 'block';
+    setTimeout(() => document.getElementById('cardOc').scrollIntoView({ behavior:'smooth', block:'nearest' }), 80);
+    atualizarOfsPedido();
+    atualizarBuscaPaletes();
+    return;
+  }
+  ativarOfComOc(of, ocs[0] || '');
+}
+
+// Uma OP com mais de um pedido (OC) dentro dela -- mostra cada um com sua
+// própria medida/qtde pedido, pro operador escolher o certo antes de ver os
+// paletes (nunca adivinha nem junta os dois, que foi o bug do app antigo).
+function renderEscolhaOc(of, ocs) {
+  const div = document.getElementById('listaOcs');
+  div.innerHTML = ocs.map(oc => {
+    const info = infoPorOc.get(of + '|' + oc) || {};
+    const disponiveis = (estoquePorOf.get(of) || []).filter(p => String(p.oc || '').trim() === oc).length;
+    return '<div class="palete-item" onclick="ativarOfComOc(\'' + esc(of) + '\', \'' + esc(oc) + '\')">'
+         + '<div><div class="pi-num">OC ' + esc(oc || '(sem OC)') + '</div>'
+         + '<div class="pi-qtd">' + (info.medidaChapa ? esc(info.medidaChapa) + ' · ' : '') + fmt(info.qtdePedido || 0) + ' chapas pedidas · ' + disponiveis + ' palete(s) em estoque</div></div>'
+         + '</div>';
+  }).join('');
+}
+
+function ativarOfComOc(of, oc) {
+  ofAtual = of;
+  ocAtual = oc;
+  document.getElementById('cardOc').style.display = 'none';
+
+  const info = infoAtual();
   let html = '';
   if (info.cliente) html += '<div class="info-linha">Cliente: <strong>' + esc(info.cliente) + '</strong></div>';
   if (info.oc && info.oc !== '0') html += '<div class="info-linha">OC: <strong>' + esc(info.oc) + '</strong></div>';
@@ -740,11 +808,13 @@ function selecionarOfChip(of) {
 function renderPaletesEstoque() {
   const div = document.getElementById('listaPaletesEstoque');
   if (!ofAtual) { div.innerHTML = ''; return; }
-  const disponiveis = (estoquePorOf.get(ofAtual) || [])
+  const multiOc = (ocsPorOf.get(ofAtual) || []).length > 1;
+  const todos = estoquePorOf.get(ofAtual) || [];
+  const disponiveis = (multiOc ? todos.filter(p => String(p.oc || '').trim() === ocAtual) : todos)
     .slice()
     .sort((a, b) => parseInt(a.numPalete, 10) - parseInt(b.numPalete, 10));
   if (!disponiveis.length) {
-    div.innerHTML = '<div class="lista-vazia">Nenhum palete desta OP em estoque</div>';
+    div.innerHTML = '<div class="lista-vazia">Nenhum palete deste pedido em estoque</div>';
     return;
   }
   // Se dois paletes desta OP tiverem o mesmo número (erro de digitação na
@@ -775,12 +845,23 @@ function toggleSelecaoPalete(chave) {
   if (idx !== -1) {
     lista.splice(idx, 1);
   } else {
+    // Cada palete selecionado carrega consigo o próprio pedido (OC, medida,
+    // qtde pedido, cliente) tirado direto do registro real -- não depende de
+    // "resolver" essa informação depois pela OP, que pode ter mais de um
+    // pedido dentro dela (foi exatamente aí que o Romaneio antigo errava,
+    // misturando quantidade de um pedido com o palete de outro).
     lista.push({
       chave,
       num: parseInt(registro.numPalete, 10) || 0,
       numStr: String(registro.numPalete),
       qtd: Number(registro.chapas) || 0,
       peso: Number(registro.peso) || 0,
+      oc: registro.oc || '',
+      cliente: registro.cliente || '',
+      tipoPapel: registro.papelao || '',
+      medidaChapa: registro.medida || '',
+      qtdePedido: parseFloat(registro.qtdePedido) || 0,
+      ofCentral: registro.ofCentral || '',
     });
     lista.sort((a, b) => a.num - b.num);
   }
@@ -795,11 +876,16 @@ function toggleSelecaoPalete(chave) {
 // ========== LISTA (barra de total) ==========
 function atualizarLista() {
   if (!ofAtual) return;
-  const lista = paletes[ofAtual] || [];
+  const todos = paletes[ofAtual] || [];
+  // Se a OP tem mais de um pedido (OC), o total mostrado aqui é só do OC
+  // ativo no momento -- senão o "total selecionado" ficaria comparando
+  // paletes de um pedido com a quantidade pedida de outro.
+  const multiOc = (ocsPorOf.get(ofAtual) || []).length > 1;
+  const lista = multiOc ? todos.filter(p => p.oc === ocAtual) : todos;
   document.getElementById('cardLista').style.display = 'block';
 
   const totalProd = lista.reduce((s, p) => s + p.qtd, 0);
-  const info = infoPorOf.get(ofAtual) || {};
+  const info = infoAtual();
   const qtdPedido = info.qtdePedido || 0;
   const bar = document.getElementById('totalBar');
   document.getElementById('totalProd').textContent = fmt(totalProd);
@@ -817,6 +903,12 @@ function atualizarLista() {
 }
 
 // ========== OPs DO MESMO CLIENTE (chips coloridos) ==========
+// Soma a qtde pedido de todos os OCs da OP (visão geral pro chip); se a OP
+// tiver só um OC, é a mesma coisa de antes.
+function somaQtdePedidoOp(of) {
+  return (ocsPorOf.get(of) || ['']).reduce((s, oc) => s + ((infoPorOc.get(of + '|' + oc) || {}).qtdePedido || 0), 0);
+}
+
 function atualizarOfsPedido() {
   const card = document.getElementById('cardOfsPedido');
   const wrap = document.getElementById('ofsPedidoWrap');
@@ -826,13 +918,13 @@ function atualizarOfsPedido() {
   if (ofsDoCliente.length < 2) { card.style.display = 'none'; return; }
   card.style.display = 'block';
   wrap.innerHTML = ofsDoCliente.map(of => {
-    const infoOf = infoPorOf.get(of) || {};
+    const ocs = ocsPorOf.get(of) || [];
     const lista = paletes[of] || [];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
-    const pedido = infoOf.qtdePedido || 0;
+    const pedido = somaQtdePedidoOp(of);
     const st = statusPedido(total, pedido) || 'verde';
     const sel = ofAtual === of ? ' selecionado' : '';
-    const desc = infoOf.medidaChapa || '';
+    const desc = ocs.length > 1 ? ocs.length + ' pedidos diferentes' : ((infoPorOc.get(of + '|' + (ocs[0] || '')) || {}).medidaChapa || '');
     const pct = pedido > 0 ? Math.min(100, (total / pedido) * 100) : 0;
     return '<div class="of-chip ' + st + sel + '" onclick="selecionarOfChip(\'' + esc(of) + '\')">'
          + '<div class="of-chip-top"><span class="dot"></span>OP ' + esc(of) + '</div>'
@@ -879,7 +971,7 @@ function atualizarBuscaPaletes() {
     const info = infoPorOf.get(ofNum) || {};
     const lista = paletes[ofNum] || [];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
-    const pedido = info.qtdePedido || 0;
+    const pedido = somaQtdePedidoOp(ofNum);
     const st = statusPedido(total, pedido) || 'verde';
     const aberta = ofBuscaAberta === ofNum;
     const pct = pedido > 0 ? Math.min(100, (total / pedido) * 100) : 0;
@@ -946,6 +1038,28 @@ function toggleResumoGerarVisivel() {
   atualizarCardGerar();
 }
 
+// Agrupa todos os paletes selecionados por (OP, OC) usando o snapshot salvo
+// em cada um (não uma busca posterior) -- fica sempre correto mesmo que a
+// mesma OP tenha mais de um pedido (OC) dentro dela, porque cada palete já
+// carrega consigo o OC/medida/qtde pedido do momento em que foi marcado.
+function gruposSelecionados() {
+  const grupos = new Map(); // "of|oc" -> {of, oc, cliente, medidaChapa, tipoPapel, qtdePedido, ofCentral, paletes:[]}
+  for (const of of Object.keys(paletes)) {
+    for (const p of (paletes[of] || [])) {
+      const chaveGrupo = of + '|' + p.oc;
+      if (!grupos.has(chaveGrupo)) {
+        grupos.set(chaveGrupo, {
+          of, oc: p.oc, cliente: p.cliente, medidaChapa: p.medidaChapa,
+          tipoPapel: p.tipoPapel, qtdePedido: p.qtdePedido, ofCentral: p.ofCentral,
+          paletes: [],
+        });
+      }
+      grupos.get(chaveGrupo).paletes.push(p);
+    }
+  }
+  return [...grupos.values()];
+}
+
 function atualizarCardGerar() {
   const ofs = Object.keys(paletes).filter(k => paletes[k].length > 0);
   const cardGerar = document.getElementById('cardGerar');
@@ -957,22 +1071,21 @@ function atualizarCardGerar() {
   btn.textContent = resumoGerarVisivel ? '🔼  Ocultar resumo dos paletes' : '📋  Ver resumo dos paletes';
   if (!resumoGerarVisivel) return;
 
-  resumoDiv.innerHTML = ofs.map(ofNum => {
-    const info = infoPorOf.get(ofNum) || {};
-    const lista = paletes[ofNum];
-    const total = lista.reduce((s, p) => s + p.qtd, 0);
-    const ped = info.qtdePedido || 0;
+  resumoDiv.innerHTML = gruposSelecionados().map(g => {
+    const total = g.paletes.reduce((s, p) => s + p.qtd, 0);
     return `<div class="resumo-item">
-      <div class="ri-tit">OP ${esc(ofNum)}${info.cliente ? '  ·  ' + esc(info.cliente) : ''}</div>
-      <div class="ri-det">${lista.length} palete(s) &nbsp;·&nbsp; ${fmt(total)} chapas${ped ? ' &nbsp;·&nbsp; Pedido: ' + fmt(ped) : ''}</div>
+      <div class="ri-tit">OP ${esc(g.of)}${g.oc ? ' · OC ' + esc(g.oc) : ''}${g.cliente ? '  ·  ' + esc(g.cliente) : ''}</div>
+      <div class="ri-det">${g.paletes.length} palete(s) &nbsp;·&nbsp; ${fmt(total)} chapas${g.qtdePedido ? ' &nbsp;·&nbsp; Pedido: ' + fmt(g.qtdePedido) : ''}</div>
     </div>`;
   }).join('');
 }
 
 function novaOf() {
   ofAtual = null;
+  ocAtual = null;
   document.getElementById('buscaOf').value = '';
   document.getElementById('alertaOf').style.display = 'none';
+  document.getElementById('cardOc').style.display = 'none';
   document.getElementById('infoOf').style.display = 'none';
   document.getElementById('cardPalete').style.display = 'none';
   document.getElementById('cardLista').style.display = 'none';
@@ -1025,6 +1138,7 @@ function gerarExcel() {
 
 function _gerarEBaixarExcel(ofs) {
   const wb = XLSX.utils.book_new();
+  const grupos = gruposSelecionados();
 
   const romData = [
     ['ROMANEIO DE EXPEDIÇÃO - PRIME ONDULADOS'],
@@ -1032,11 +1146,10 @@ function _gerarEBaixarExcel(ofs) {
     [],
     ['Cliente','OP','OF','OC','Medida Chapa (L × C)','Nº Palete','Qtde Palete','Qtde Pedido']
   ];
-  ofs.forEach(ofNum => {
-    const info = infoPorOf.get(ofNum) || {};
-    paletes[ofNum].forEach(p => romData.push([
-      info.cliente || '', ofNum, info.ofCentral || '', info.oc || '', info.medidaChapa || '',
-      p.numStr, p.qtd, info.qtdePedido || ''
+  grupos.forEach(g => {
+    g.paletes.forEach(p => romData.push([
+      g.cliente || '', g.of, g.ofCentral || '', g.oc || '', g.medidaChapa || '',
+      p.numStr, p.qtd, g.qtdePedido || ''
     ]));
   });
   const wsRom = XLSX.utils.aoa_to_sheet(romData);
@@ -1047,22 +1160,20 @@ function _gerarEBaixarExcel(ofs) {
     ['RESUMO POR ORDEM DE PRODUÇÃO'], [],
     ['OP','OF','Cliente','OC','Tipo de Papel','Medida (L × C)','Qtde Pedido','Total Expedido','Saldo','Nº de Paletes']
   ];
-  ofs.forEach(ofNum => {
-    const info = infoPorOf.get(ofNum) || {};
-    const lista = paletes[ofNum];
-    const total = lista.reduce((s, p) => s + p.qtd, 0);
-    const ped = info.qtdePedido || 0;
+  grupos.forEach(g => {
+    const total = g.paletes.reduce((s, p) => s + p.qtd, 0);
+    const ped = g.qtdePedido || 0;
     resData.push([
-      ofNum,
-      info.ofCentral || '',
-      info.cliente || '',
-      info.oc || '',
-      info.tipoPapel || '',
-      info.medidaChapa || '',
+      g.of,
+      g.ofCentral || '',
+      g.cliente || '',
+      g.oc || '',
+      g.tipoPapel || '',
+      g.medidaChapa || '',
       ped || '',
       total,
       ped ? (ped - total) : '',
-      lista.length
+      g.paletes.length
     ]);
   });
   const wsRes = XLSX.utils.aoa_to_sheet(resData);
@@ -1070,10 +1181,7 @@ function _gerarEBaixarExcel(ofs) {
   XLSX.utils.book_append_sheet(wb, wsRes, 'Resumo');
 
   const data = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-  const nomesClientes = [...new Set(ofs.map(ofNum => {
-    const info = infoPorOf.get(ofNum);
-    return info && info.cliente ? limparNomeArquivo(info.cliente) : '';
-  }).filter(Boolean))];
+  const nomesClientes = [...new Set(grupos.map(g => g.cliente ? limparNomeArquivo(g.cliente) : '').filter(Boolean))];
   const clientesPart = nomesClientes.length
     ? '_'+(nomesClientes.length>3 ? nomesClientes.slice(0,3).join('-')+'+'+(nomesClientes.length-3) : nomesClientes.join('-'))
     : '';
