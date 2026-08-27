@@ -505,13 +505,25 @@ const STORAGE_KEY = 'romaneio_paletes_v2';
 const ESTOQUE_URL = 'https://raw.githubusercontent.com/marcilianocamargo-stack/controle-producao-etiquetas/main/estoque.json';
 const SAIDA_WEBHOOK_URL = 'https://n8n.mcamargo.uk/webhook/saida-estoque';
 
-let estoquePorOf  = new Map();  // of -> [{numPalete, chapas, peso, medida, ...}] (paletes reais em estoque)
-let infoPorOf     = new Map();  // of -> {cliente} (resumo geral, cliente é igual entre OCs da mesma OP)
-let infoPorOc     = new Map();  // "of|oc" -> {cliente, oc, ofCentral, tipoPapel, medidaChapa, qtdePedido}
-let ocsPorOf      = new Map();  // of -> [oc1, oc2, ...] distintas
-let clientesData  = new Map();  // cliente -> [ofs...] (só pra navegação "ver por cliente")
+let estoquePorOf   = new Map();  // of -> [{numPalete, chapas, peso, medida, ...}] (paletes reais em estoque)
+let infoPorOf      = new Map();  // of -> {cliente} (resumo geral, cliente é igual entre pedidos da mesma OP)
+let infoPorPedido  = new Map();  // "of|assinatura" -> {cliente, oc, ofCentral, tipoPapel, medidaChapa, qtdePedido}
+let pedidosPorOf   = new Map();  // of -> [assinatura1, assinatura2, ...] distintas
+let clientesData   = new Map();  // cliente -> [ofs...] (só pra navegação "ver por cliente")
 let ofAtual  = null;
-let ocAtual  = null;  // OC ativa dentro da OP, só usada quando a OP tem mais de uma
+let pedidoAtual = null;  // assinatura do pedido ativo dentro da OP, só usada quando a OP tem mais de um
+
+// Identifica um "pedido" dentro de uma OP -- normalmente é só o OC, mas
+// também entram medida e qtde pedido: já aconteceu de repetir o número da
+// OP por engano ao montar a programação, com OC igual mas medida diferente
+// (erro de digitação), então checar só o OC não seria suficiente pra pegar
+// esse caso. Qualquer diferença aqui já é motivo de perguntar ao operador.
+// Aceita tanto um registro de estoque cru (campo "medida") quanto um
+// palete já selecionado (campo "medidaChapa", snapshot salvo na hora da
+// seleção) -- as duas formas representam a mesma coisa.
+function assinaturaPedido(p) {
+  return (p.oc || '') + '|' + (p.medida || p.medidaChapa || '') + '|' + (p.qtdePedido || '');
+}
 let paletes  = carregarPaletesSalvos();  // { of: [{chave, num, numStr, qtd, peso}] } -- selecionados NESTE romaneio, persistido no aparelho
 
 // Identidade de um palete em estoque. Normalmente numPalete já seria único
@@ -550,25 +562,23 @@ function statusPedido(total, pedido) {
 }
 
 // ========== CARREGAR ESTOQUE ==========
-// Uma mesma OP pode legitimamente ter mais de um pedido (OC) dentro dela --
-// cada OC com sua própria medida/qtde pedido. infoPorOf guarda um resumo
-// "geral" (cliente é sempre igual entre as OCs da mesma OP, então serve pra
-// navegação por cliente); infoPorOc guarda o detalhe POR OC, que é o que
-// realmente precisa ser mostrado certo pro operador na hora de gerar o
-// romaneio -- misturar OCs diferentes foi exatamente o bug do Romaneio
-// antigo (ficava só com a de maior quantidade e descartava a outra).
+// Uma mesma OP pode legitimamente ter mais de um pedido dentro dela (OC
+// diferente), e também pode ter um erro de digitação na programação (OC
+// igual, medida errada) -- os dois casos são tratados igual aqui: qualquer
+// diferença na assinatura do pedido (OC+medida+qtde) faz o operador
+// escolher, em vez de mostrar/misturar dados errados sem avisar.
 function carregarEstoque(lista) {
   estoquePorOf = new Map();
   infoPorOf = new Map();
-  infoPorOc = new Map();   // "of|oc" -> {cliente, oc, ofCentral, tipoPapel, medidaChapa, qtdePedido}
-  ocsPorOf = new Map();    // of -> [oc1, oc2, ...] (distintas, na ordem em que apareceram)
+  infoPorPedido = new Map();  // "of|assinatura" -> {cliente, oc, ofCentral, tipoPapel, medidaChapa, qtdePedido}
+  pedidosPorOf = new Map();   // of -> [assinatura1, assinatura2, ...] (distintas, na ordem em que apareceram)
   clientesData = new Map();
   const contagemChave = {};
 
   for (const p of lista) {
     const of = String(p.of || '').trim();
     if (!of) continue;
-    const oc = String(p.oc || '').trim();
+    const pedido = assinaturaPedido(p);
     const base = of + '|' + p.numPalete + '|' + p.chapas + '|' + p.peso;
     contagemChave[base] = (contagemChave[base] || 0) + 1;
     p.chave = base + '#' + contagemChave[base];
@@ -577,9 +587,9 @@ function carregarEstoque(lista) {
 
     if (!infoPorOf.has(of)) infoPorOf.set(of, { cliente: p.cliente || '' });
 
-    const chaveOc = of + '|' + oc;
-    if (!infoPorOc.has(chaveOc)) {
-      infoPorOc.set(chaveOc, {
+    const chavePedido = of + '|' + pedido;
+    if (!infoPorPedido.has(chavePedido)) {
+      infoPorPedido.set(chavePedido, {
         cliente: p.cliente || '',
         oc: p.oc || '',
         ofCentral: p.ofCentral || '',
@@ -588,8 +598,8 @@ function carregarEstoque(lista) {
         qtdePedido: parseFloat(p.qtdePedido) || 0,
       });
     }
-    if (!ocsPorOf.has(of)) ocsPorOf.set(of, []);
-    if (!ocsPorOf.get(of).includes(oc)) ocsPorOf.get(of).push(oc);
+    if (!pedidosPorOf.has(of)) pedidosPorOf.set(of, []);
+    if (!pedidosPorOf.get(of).includes(pedido)) pedidosPorOf.get(of).push(pedido);
   }
 
   for (const [of, info] of infoPorOf) {
@@ -603,7 +613,7 @@ function carregarEstoque(lista) {
 // Info do pedido ativo (OP + OC quando a OP tiver mais de um).
 function infoAtual() {
   if (!ofAtual) return {};
-  return infoPorOc.get(ofAtual + '|' + (ocAtual || '')) || {};
+  return infoPorPedido.get(ofAtual + '|' + (pedidoAtual || '')) || {};
 }
 
 // Remove da seleção local qualquer palete que não esteja mais em estoque
@@ -731,7 +741,7 @@ function limparBusca() {
   document.getElementById('cardPalete').style.display = 'none';
   document.getElementById('cardLista').style.display = 'none';
   ofAtual = null;
-  ocAtual = null;
+  pedidoAtual = null;
   atualizarCardGerar();
   atualizarOfsPedido();
   atualizarBuscaPaletes();
@@ -741,41 +751,41 @@ function limparBusca() {
 function ativarOf(of) {
   if (!estoquePorOf.has(of)) return;
   ofAtual = of;
-  ocAtual = null;
+  pedidoAtual = null;
   document.getElementById('cardOc').style.display = 'none';
   document.getElementById('infoOf').style.display = 'none';
   document.getElementById('cardPalete').style.display = 'none';
 
-  const ocs = ocsPorOf.get(of) || [];
-  if (ocs.length > 1) {
-    renderEscolhaOc(of, ocs);
+  const pedidos = pedidosPorOf.get(of) || [];
+  if (pedidos.length > 1) {
+    renderEscolhaOc(of, pedidos);
     document.getElementById('cardOc').style.display = 'block';
     setTimeout(() => document.getElementById('cardOc').scrollIntoView({ behavior:'smooth', block:'nearest' }), 80);
     atualizarOfsPedido();
     atualizarBuscaPaletes();
     return;
   }
-  ativarOfComOc(of, ocs[0] || '');
+  ativarOfComOc(of, pedidos[0] || '');
 }
 
-// Uma OP com mais de um pedido (OC) dentro dela -- mostra cada um com sua
-// própria medida/qtde pedido, pro operador escolher o certo antes de ver os
+// Uma OP com mais de um pedido dentro dela -- mostra cada um com seu OC,
+// medida e qtde pedido, pro operador escolher o certo antes de ver os
 // paletes (nunca adivinha nem junta os dois, que foi o bug do app antigo).
-function renderEscolhaOc(of, ocs) {
+function renderEscolhaOc(of, pedidos) {
   const div = document.getElementById('listaOcs');
-  div.innerHTML = ocs.map(oc => {
-    const info = infoPorOc.get(of + '|' + oc) || {};
-    const disponiveis = (estoquePorOf.get(of) || []).filter(p => String(p.oc || '').trim() === oc).length;
-    return '<div class="palete-item" onclick="ativarOfComOc(\'' + esc(of) + '\', \'' + esc(oc) + '\')">'
-         + '<div><div class="pi-num">OC ' + esc(oc || '(sem OC)') + '</div>'
+  div.innerHTML = pedidos.map(pedido => {
+    const info = infoPorPedido.get(of + '|' + pedido) || {};
+    const disponiveis = (estoquePorOf.get(of) || []).filter(p => assinaturaPedido(p) === pedido).length;
+    return '<div class="palete-item" onclick="ativarOfComOc(\'' + esc(of) + '\', \'' + esc(pedido) + '\')">'
+         + '<div><div class="pi-num">OC ' + esc(info.oc || '(sem OC)') + '</div>'
          + '<div class="pi-qtd">' + (info.medidaChapa ? esc(info.medidaChapa) + ' · ' : '') + fmt(info.qtdePedido || 0) + ' chapas pedidas · ' + disponiveis + ' palete(s) em estoque</div></div>'
          + '</div>';
   }).join('');
 }
 
-function ativarOfComOc(of, oc) {
+function ativarOfComOc(of, pedido) {
   ofAtual = of;
-  ocAtual = oc;
+  pedidoAtual = pedido;
   document.getElementById('cardOc').style.display = 'none';
 
   const info = infoAtual();
@@ -808,9 +818,9 @@ function selecionarOfChip(of) {
 function renderPaletesEstoque() {
   const div = document.getElementById('listaPaletesEstoque');
   if (!ofAtual) { div.innerHTML = ''; return; }
-  const multiOc = (ocsPorOf.get(ofAtual) || []).length > 1;
+  const multiPedido = (pedidosPorOf.get(ofAtual) || []).length > 1;
   const todos = estoquePorOf.get(ofAtual) || [];
-  const disponiveis = (multiOc ? todos.filter(p => String(p.oc || '').trim() === ocAtual) : todos)
+  const disponiveis = (multiPedido ? todos.filter(p => assinaturaPedido(p) === pedidoAtual) : todos)
     .slice()
     .sort((a, b) => parseInt(a.numPalete, 10) - parseInt(b.numPalete, 10));
   if (!disponiveis.length) {
@@ -877,11 +887,11 @@ function toggleSelecaoPalete(chave) {
 function atualizarLista() {
   if (!ofAtual) return;
   const todos = paletes[ofAtual] || [];
-  // Se a OP tem mais de um pedido (OC), o total mostrado aqui é só do OC
+  // Se a OP tem mais de um pedido, o total mostrado aqui é só do pedido
   // ativo no momento -- senão o "total selecionado" ficaria comparando
   // paletes de um pedido com a quantidade pedida de outro.
-  const multiOc = (ocsPorOf.get(ofAtual) || []).length > 1;
-  const lista = multiOc ? todos.filter(p => p.oc === ocAtual) : todos;
+  const multiPedido = (pedidosPorOf.get(ofAtual) || []).length > 1;
+  const lista = multiPedido ? todos.filter(p => assinaturaPedido(p) === pedidoAtual) : todos;
   document.getElementById('cardLista').style.display = 'block';
 
   const totalProd = lista.reduce((s, p) => s + p.qtd, 0);
@@ -903,10 +913,10 @@ function atualizarLista() {
 }
 
 // ========== OPs DO MESMO CLIENTE (chips coloridos) ==========
-// Soma a qtde pedido de todos os OCs da OP (visão geral pro chip); se a OP
-// tiver só um OC, é a mesma coisa de antes.
+// Soma a qtde pedido de todos os pedidos da OP (visão geral pro chip); se a
+// OP tiver só um, é a mesma coisa de antes.
 function somaQtdePedidoOp(of) {
-  return (ocsPorOf.get(of) || ['']).reduce((s, oc) => s + ((infoPorOc.get(of + '|' + oc) || {}).qtdePedido || 0), 0);
+  return (pedidosPorOf.get(of) || ['']).reduce((s, pedido) => s + ((infoPorPedido.get(of + '|' + pedido) || {}).qtdePedido || 0), 0);
 }
 
 function atualizarOfsPedido() {
@@ -918,13 +928,13 @@ function atualizarOfsPedido() {
   if (ofsDoCliente.length < 2) { card.style.display = 'none'; return; }
   card.style.display = 'block';
   wrap.innerHTML = ofsDoCliente.map(of => {
-    const ocs = ocsPorOf.get(of) || [];
+    const pedidosDaOp = pedidosPorOf.get(of) || [];
     const lista = paletes[of] || [];
     const total = lista.reduce((s, p) => s + p.qtd, 0);
     const pedido = somaQtdePedidoOp(of);
     const st = statusPedido(total, pedido) || 'verde';
     const sel = ofAtual === of ? ' selecionado' : '';
-    const desc = ocs.length > 1 ? ocs.length + ' pedidos diferentes' : ((infoPorOc.get(of + '|' + (ocs[0] || '')) || {}).medidaChapa || '');
+    const desc = pedidosDaOp.length > 1 ? pedidosDaOp.length + ' pedidos diferentes' : ((infoPorPedido.get(of + '|' + (pedidosDaOp[0] || '')) || {}).medidaChapa || '');
     const pct = pedido > 0 ? Math.min(100, (total / pedido) * 100) : 0;
     return '<div class="of-chip ' + st + sel + '" onclick="selecionarOfChip(\'' + esc(of) + '\')">'
          + '<div class="of-chip-top"><span class="dot"></span>OP ' + esc(of) + '</div>'
@@ -1082,7 +1092,7 @@ function atualizarCardGerar() {
 
 function novaOf() {
   ofAtual = null;
-  ocAtual = null;
+  pedidoAtual = null;
   document.getElementById('buscaOf').value = '';
   document.getElementById('alertaOf').style.display = 'none';
   document.getElementById('cardOc').style.display = 'none';
