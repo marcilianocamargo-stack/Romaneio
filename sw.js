@@ -1,4 +1,4 @@
-const CACHE = 'romaneio-v4';
+const CACHE = 'romaneio-v5';
 const ASSETS = [
   './index.html',
   './manifest-romaneio.json',
@@ -22,9 +22,11 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // 1) A programação NUNCA é cacheada — sempre rede (garante os dados do dia).
-  if (url.pathname.endsWith('programacao-hoje.xlsx')) {
-    return; // deixa o fetch original (com no-store) buscar direto da rede
+  // 1) O estoque (raw.githubusercontent.com) NUNCA é cacheado — sempre rede
+  //    (garante o estoque real na hora, e o proprio index.html ja manda
+  //    ?t=timestamp + no-store, entao isso aqui e so uma garantia extra).
+  if (url.hostname === 'raw.githubusercontent.com') {
+    return; // deixa o fetch original buscar direto da rede
   }
 
   // 2) index.html / navegação: REDE PRIMEIRO (app sempre atualizado),
