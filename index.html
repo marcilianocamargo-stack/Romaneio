@@ -1000,9 +1000,17 @@ function atualizarBuscaPaletes() {
       ? '<div class="lista-vazia">Nenhum palete selecionado nesta OP</div>'
       : lista.map(p => {
           const pAberto = paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.chave === p.chave;
+          const corrigido = p.qtdOriginal !== undefined && p.qtdOriginal !== p.qtd;
           return '<div class="palete-item marcado' + (pAberto ? ' aberto' : '') + '" onclick="togglePaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.chave) + '\')">'
-               + '<div><div class="pi-num">Palete ' + esc(p.numStr) + '</div><div class="pi-qtd">' + fmt(p.qtd) + ' chapas</div></div>'
-               + (pAberto ? '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.chave) + '\')">✕&nbsp;&nbsp;Desmarcar este palete</button>' : '')
+               + '<div><div class="pi-num">Palete ' + esc(p.numStr) + '</div><div class="pi-qtd">' + fmt(p.qtd) + ' chapas'
+               + (corrigido ? ' <span style="color:#d84315;font-weight:800">(corrigido, original ' + fmt(p.qtdOriginal) + ')</span>' : '') + '</div></div>'
+               + (pAberto ? (
+                   '<div class="pi-corrigir" onclick="event.stopPropagation()" style="flex:1 0 100%;display:flex;gap:8px;margin-top:12px">'
+                   + '<input type="number" min="1" value="' + p.qtd + '" style="flex:1">'
+                   + '<button class="pi-del-inline" style="background:#1a56a0;width:auto;padding:0 16px;margin:0" onclick="corrigirQtdPalete(this, \'' + esc(ofNum) + '\', \'' + esc(p.chave) + '\')">💾</button>'
+                   + '</div>'
+                   + '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.chave) + '\')">✕&nbsp;&nbsp;Desmarcar este palete</button>'
+                 ) : '')
                + '</div>';
         }).join('');
 
@@ -1025,6 +1033,28 @@ function toggleBuscaOf(ofNum) {
 function togglePaleteBusca(ofNum, chave) {
   paleteBuscaAberto = (paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.chave === chave) ? null : { of: ofNum, chave };
   atualizarBuscaPaletes();
+}
+
+// Corrige a quantidade de chapas de um palete já selecionado -- útil quando
+// o operador ajustou fisicamente a quantidade depois de imprimir a etiqueta
+// (ex.: descartou chapas com problema de qualidade) e o número no sistema
+// ficou diferente do que está de verdade no palete. Guarda o valor original
+// só pra mostrar que foi corrigido; não mexe no estoque nem na etiqueta,
+// só no que sai impresso/baixado neste romaneio.
+function corrigirQtdPalete(btn, ofNum, chave) {
+  const input = btn.previousElementSibling;
+  const novaQtd = parseInt(input.value, 10);
+  if (!novaQtd || novaQtd < 1) { alert('Quantidade inválida.'); return; }
+  const item = (paletes[ofNum] || []).find(p => p.chave === chave);
+  if (!item) return;
+  if (item.qtdOriginal === undefined) item.qtdOriginal = item.qtd;
+  item.qtd = novaQtd;
+  salvarPaletesStorage();
+  if (ofAtual === ofNum) atualizarLista();
+  atualizarCardGerar();
+  atualizarOfsPedido();
+  atualizarBuscaPaletes();
+  mostrarFlash('✓  Quantidade corrigida\npara ' + fmt(novaQtd) + ' chapas');
 }
 
 function removerPaleteBusca(ofNum, chave) {
