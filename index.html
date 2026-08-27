@@ -504,7 +504,15 @@ let estoquePorOf  = new Map();  // of -> [{numPalete, chapas, peso, medida, ...}
 let infoPorOf     = new Map();  // of -> {cliente, oc, ofCentral, tipoPapel, medidaChapa, qtdePedido}
 let clientesData  = new Map();  // cliente -> [ofs...] (só pra navegação "ver por cliente")
 let ofAtual  = null;
-let paletes  = carregarPaletesSalvos();  // { of: [{num, numStr, qtd, peso}] } -- selecionados NESTE romaneio, persistido no aparelho
+let paletes  = carregarPaletesSalvos();  // { of: [{chave, num, numStr, qtd, peso}] } -- selecionados NESTE romaneio, persistido no aparelho
+
+// Identidade de um palete em estoque. Normalmente numPalete já seria único
+// dentro da OP, mas existe registro antigo com número repetido por engano
+// de digitação na fábrica -- e mesmo se dois registros fossem IDÊNTICOS em
+// tudo (mesmo número, mesma quantidade), ainda são dois paletes físicos
+// diferentes e os dois têm que continuar aparecendo, selecionáveis
+// separadamente. Por isso a chave carrega um contador de ocorrência,
+// atribuído uma vez em carregarEstoque() e gravado no próprio registro.
 
 function carregarPaletesSalvos() {
   try {
@@ -538,10 +546,14 @@ function carregarEstoque(lista) {
   estoquePorOf = new Map();
   infoPorOf = new Map();
   clientesData = new Map();
+  const contagemChave = {};
 
   for (const p of lista) {
     const of = String(p.of || '').trim();
     if (!of) continue;
+    const base = of + '|' + p.numPalete + '|' + p.chapas + '|' + p.peso;
+    contagemChave[base] = (contagemChave[base] || 0) + 1;
+    p.chave = base + '#' + contagemChave[base];
     if (!estoquePorOf.has(of)) estoquePorOf.set(of, []);
     estoquePorOf.get(of).push(p);
     if (!infoPorOf.has(of)) {
@@ -567,9 +579,9 @@ function carregarEstoque(lista) {
 // Remove da seleção local qualquer palete que não esteja mais em estoque
 // (ex.: outro aparelho já deu baixa nele antes deste sincronizar).
 function reconciliarSelecao(of) {
-  const disponiveis = new Set((estoquePorOf.get(of) || []).map(p => String(p.numPalete)));
+  const disponiveis = new Set((estoquePorOf.get(of) || []).map(p => p.chave));
   const lista = paletes[of] || [];
-  const filtrada = lista.filter(p => disponiveis.has(p.numStr));
+  const filtrada = lista.filter(p => disponiveis.has(p.chave));
   if (filtrada.length !== lista.length) {
     if (filtrada.length) paletes[of] = filtrada; else delete paletes[of];
     salvarPaletesStorage();
@@ -735,30 +747,38 @@ function renderPaletesEstoque() {
     div.innerHTML = '<div class="lista-vazia">Nenhum palete desta OP em estoque</div>';
     return;
   }
-  const selecionados = new Set((paletes[ofAtual] || []).map(p => p.numStr));
+  // Se dois paletes desta OP tiverem o mesmo número (erro de digitação na
+  // fábrica), avisa pra conferir pela quantidade em vez de confiar só no
+  // número -- sem isso ficam parecendo o mesmo item na lista.
+  const contagemNum = {};
+  disponiveis.forEach(p => { contagemNum[p.numPalete] = (contagemNum[p.numPalete] || 0) + 1; });
+
+  const selecionados = new Set((paletes[ofAtual] || []).map(p => p.chave));
   div.innerHTML = disponiveis.map(p => {
-    const marcado = selecionados.has(String(p.numPalete));
+    const marcado = selecionados.has(p.chave);
+    const repetido = contagemNum[p.numPalete] > 1;
     const detalhes = [fmt(p.chapas) + ' chapas', p.peso ? fmtKg(p.peso) + ' kg' : null].filter(Boolean).join(' · ');
-    return '<div class="palete-item' + (marcado ? ' marcado' : '') + '" onclick="toggleSelecaoPalete(\'' + esc(String(p.numPalete)) + '\')">'
-         + '<div><div class="pi-num">' + (marcado ? '☑' : '☐') + '&nbsp; Palete ' + esc(String(p.numPalete)) + '</div>'
-         + '<div class="pi-qtd">' + detalhes + '</div></div>'
+    return '<div class="palete-item' + (marcado ? ' marcado' : '') + '" onclick="toggleSelecaoPalete(\'' + esc(p.chave) + '\')">'
+         + '<div><div class="pi-num">' + (marcado ? '☑' : '☐') + '&nbsp; Palete ' + esc(String(p.numPalete)) + (repetido ? ' ⚠' : '') + '</div>'
+         + '<div class="pi-qtd">' + detalhes + (repetido ? ' — nº repetido, confira a quantidade' : '') + '</div></div>'
          + '</div>';
   }).join('');
 }
 
-function toggleSelecaoPalete(numStr) {
+function toggleSelecaoPalete(chave) {
   if (!ofAtual) return;
-  const registro = (estoquePorOf.get(ofAtual) || []).find(p => String(p.numPalete) === numStr);
+  const registro = (estoquePorOf.get(ofAtual) || []).find(p => p.chave === chave);
   if (!registro) return;
   if (!paletes[ofAtual]) paletes[ofAtual] = [];
   const lista = paletes[ofAtual];
-  const idx = lista.findIndex(p => p.numStr === numStr);
+  const idx = lista.findIndex(p => p.chave === chave);
   if (idx !== -1) {
     lista.splice(idx, 1);
   } else {
     lista.push({
-      num: parseInt(numStr, 10) || 0,
-      numStr,
+      chave,
+      num: parseInt(registro.numPalete, 10) || 0,
+      numStr: String(registro.numPalete),
       qtd: Number(registro.chapas) || 0,
       peso: Number(registro.peso) || 0,
     });
@@ -877,10 +897,10 @@ function atualizarBuscaPaletes() {
     const paletesHtml = lista.length === 0
       ? '<div class="lista-vazia">Nenhum palete selecionado nesta OP</div>'
       : lista.map(p => {
-          const pAberto = paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.numStr === p.numStr;
-          return '<div class="palete-item marcado' + (pAberto ? ' aberto' : '') + '" onclick="togglePaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.numStr) + '\')">'
+          const pAberto = paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.chave === p.chave;
+          return '<div class="palete-item marcado' + (pAberto ? ' aberto' : '') + '" onclick="togglePaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.chave) + '\')">'
                + '<div><div class="pi-num">Palete ' + esc(p.numStr) + '</div><div class="pi-qtd">' + fmt(p.qtd) + ' chapas</div></div>'
-               + (pAberto ? '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.numStr) + '\')">✕&nbsp;&nbsp;Desmarcar este palete</button>' : '')
+               + (pAberto ? '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.chave) + '\')">✕&nbsp;&nbsp;Desmarcar este palete</button>' : '')
                + '</div>';
         }).join('');
 
@@ -900,14 +920,16 @@ function toggleBuscaOf(ofNum) {
   atualizarBuscaPaletes();
 }
 
-function togglePaleteBusca(ofNum, numStr) {
-  paleteBuscaAberto = (paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.numStr === numStr) ? null : { of: ofNum, numStr };
+function togglePaleteBusca(ofNum, chave) {
+  paleteBuscaAberto = (paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.chave === chave) ? null : { of: ofNum, chave };
   atualizarBuscaPaletes();
 }
 
-function removerPaleteBusca(ofNum, numStr) {
-  if (!confirm('Desmarcar Palete ' + numStr + ' da OP ' + ofNum + '?')) return;
-  paletes[ofNum] = (paletes[ofNum] || []).filter(p => p.numStr !== numStr);
+function removerPaleteBusca(ofNum, chave) {
+  const item = (paletes[ofNum] || []).find(p => p.chave === chave);
+  if (!item) return;
+  if (!confirm('Desmarcar Palete ' + item.numStr + ' (' + fmt(item.qtd) + ' chapas) da OP ' + ofNum + '?')) return;
+  paletes[ofNum] = (paletes[ofNum] || []).filter(p => p.chave !== chave);
   salvarPaletesStorage();
   paleteBuscaAberto = null;
   if (ofAtual === ofNum) { renderPaletesEstoque(); atualizarLista(); }
