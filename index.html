@@ -242,6 +242,19 @@ input.inp-grande {
   transition: background .15s;
 }
 .pi-del-inline:active { background: #a52222; }
+.pi-editar {
+  background: #1a56a0;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  font-size: 17px;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.pi-editar:active { background: #123f78; }
 
 .lista-vazia { text-align: center; color: #999; font-size: 18px; padding: 24px 0; font-style: italic; }
 
@@ -833,16 +846,65 @@ function renderPaletesEstoque() {
   const contagemNum = {};
   disponiveis.forEach(p => { contagemNum[p.numPalete] = (contagemNum[p.numPalete] || 0) + 1; });
 
-  const selecionados = new Set((paletes[ofAtual] || []).map(p => p.chave));
+  const selecaoAtual = paletes[ofAtual] || [];
+  const selecionadosPorChave = new Map(selecaoAtual.map(p => [p.chave, p]));
   div.innerHTML = disponiveis.map(p => {
-    const marcado = selecionados.has(p.chave);
+    const sel = selecionadosPorChave.get(p.chave);
+    const marcado = !!sel;
     const repetido = contagemNum[p.numPalete] > 1;
-    const detalhes = [fmt(p.chapas) + ' chapas', p.peso ? fmtKg(p.peso) + ' kg' : null].filter(Boolean).join(' · ');
-    return '<div class="palete-item' + (marcado ? ' marcado' : '') + '" onclick="toggleSelecaoPalete(\'' + esc(p.chave) + '\')">'
-         + '<div><div class="pi-num">' + (marcado ? '☑' : '☐') + '&nbsp; Palete ' + esc(String(p.numPalete)) + (repetido ? ' ⚠' : '') + '</div>'
-         + '<div class="pi-qtd">' + detalhes + (repetido ? ' — nº repetido, confira a quantidade' : '') + '</div></div>'
-         + '</div>';
+    const qtdMostrar = sel ? sel.qtd : p.chapas;
+    const corrigido = sel && sel.qtdOriginal !== undefined && sel.qtdOriginal !== sel.qtd;
+    const editando = paleteEditando === p.chave;
+    const detalhes = fmt(qtdMostrar) + ' chapas' + (p.peso ? ' · ' + fmtKg(p.peso) + ' kg' : '')
+      + (corrigido ? ' <span style="color:#d84315;font-weight:800">(corrigido, original ' + fmt(sel.qtdOriginal) + ')</span>' : '');
+
+    let html = '<div class="palete-item' + (marcado ? ' marcado' : '') + '" onclick="toggleSelecaoPalete(\'' + esc(p.chave) + '\')">'
+      + '<div><div class="pi-num">' + (marcado ? '☑' : '☐') + '&nbsp; Palete ' + esc(String(p.numPalete)) + (repetido ? ' ⚠' : '') + '</div>'
+      + '<div class="pi-qtd">' + detalhes + (repetido ? ' — nº repetido, confira a quantidade' : '') + '</div></div>';
+
+    if (marcado) {
+      html += '<button class="pi-editar" title="Corrigir quantidade" onclick="event.stopPropagation(); '
+        + (editando ? 'fecharEdicaoQtd()' : 'abrirEdicaoQtd(\'' + esc(p.chave) + '\')') + '">' + (editando ? '✕' : '✎') + '</button>';
+    }
+    if (editando) {
+      html += '<div onclick="event.stopPropagation()" style="flex:1 0 100%;display:flex;gap:8px;margin-top:10px">'
+        + '<input type="number" min="1" value="' + qtdMostrar + '" style="flex:1">'
+        + '<button class="pi-del-inline" style="background:#1a56a0;width:auto;padding:0 16px;margin:0;flex:0 0 auto" onclick="salvarEdicaoQtd(this, \'' + esc(p.chave) + '\')">💾 Salvar</button>'
+        + '</div>';
+    }
+    return html + '</div>';
   }).join('');
+}
+
+// Editar quantidade direto na lista de seleção (depois de marcar o palete)
+// -- raro precisar, mas o operador às vezes ajusta fisicamente a
+// quantidade (ex.: descarte por qualidade) e o número do sistema fica
+// diferente do que está de verdade no palete.
+let paleteEditando = null;
+function abrirEdicaoQtd(chave) {
+  paleteEditando = chave;
+  renderPaletesEstoque();
+}
+function fecharEdicaoQtd() {
+  paleteEditando = null;
+  renderPaletesEstoque();
+}
+function salvarEdicaoQtd(btn, chave) {
+  const input = btn.previousElementSibling;
+  const novaQtd = parseInt(input.value, 10);
+  if (!novaQtd || novaQtd < 1) { alert('Quantidade inválida.'); return; }
+  const item = (paletes[ofAtual] || []).find(p => p.chave === chave);
+  if (!item) return;
+  if (item.qtdOriginal === undefined) item.qtdOriginal = item.qtd;
+  item.qtd = novaQtd;
+  salvarPaletesStorage();
+  paleteEditando = null;
+  renderPaletesEstoque();
+  atualizarLista();
+  atualizarCardGerar();
+  atualizarOfsPedido();
+  atualizarBuscaPaletes();
+  mostrarFlash('✓  Quantidade corrigida\npara ' + fmt(novaQtd) + ' chapas');
 }
 
 function toggleSelecaoPalete(chave) {
@@ -1004,13 +1066,7 @@ function atualizarBuscaPaletes() {
           return '<div class="palete-item marcado' + (pAberto ? ' aberto' : '') + '" onclick="togglePaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.chave) + '\')">'
                + '<div><div class="pi-num">Palete ' + esc(p.numStr) + '</div><div class="pi-qtd">' + fmt(p.qtd) + ' chapas'
                + (corrigido ? ' <span style="color:#d84315;font-weight:800">(corrigido, original ' + fmt(p.qtdOriginal) + ')</span>' : '') + '</div></div>'
-               + (pAberto ? (
-                   '<div class="pi-corrigir" onclick="event.stopPropagation()" style="flex:1 0 100%;display:flex;gap:8px;margin-top:12px">'
-                   + '<input type="number" min="1" value="' + p.qtd + '" style="flex:1">'
-                   + '<button class="pi-del-inline" style="background:#1a56a0;width:auto;padding:0 16px;margin:0" onclick="corrigirQtdPalete(this, \'' + esc(ofNum) + '\', \'' + esc(p.chave) + '\')">💾</button>'
-                   + '</div>'
-                   + '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.chave) + '\')">✕&nbsp;&nbsp;Desmarcar este palete</button>'
-                 ) : '')
+               + (pAberto ? '<button class="pi-del-inline" onclick="event.stopPropagation(); removerPaleteBusca(\'' + esc(ofNum) + '\', \'' + esc(p.chave) + '\')">✕&nbsp;&nbsp;Desmarcar este palete</button>' : '')
                + '</div>';
         }).join('');
 
@@ -1033,28 +1089,6 @@ function toggleBuscaOf(ofNum) {
 function togglePaleteBusca(ofNum, chave) {
   paleteBuscaAberto = (paleteBuscaAberto && paleteBuscaAberto.of === ofNum && paleteBuscaAberto.chave === chave) ? null : { of: ofNum, chave };
   atualizarBuscaPaletes();
-}
-
-// Corrige a quantidade de chapas de um palete já selecionado -- útil quando
-// o operador ajustou fisicamente a quantidade depois de imprimir a etiqueta
-// (ex.: descartou chapas com problema de qualidade) e o número no sistema
-// ficou diferente do que está de verdade no palete. Guarda o valor original
-// só pra mostrar que foi corrigido; não mexe no estoque nem na etiqueta,
-// só no que sai impresso/baixado neste romaneio.
-function corrigirQtdPalete(btn, ofNum, chave) {
-  const input = btn.previousElementSibling;
-  const novaQtd = parseInt(input.value, 10);
-  if (!novaQtd || novaQtd < 1) { alert('Quantidade inválida.'); return; }
-  const item = (paletes[ofNum] || []).find(p => p.chave === chave);
-  if (!item) return;
-  if (item.qtdOriginal === undefined) item.qtdOriginal = item.qtd;
-  item.qtd = novaQtd;
-  salvarPaletesStorage();
-  if (ofAtual === ofNum) atualizarLista();
-  atualizarCardGerar();
-  atualizarOfsPedido();
-  atualizarBuscaPaletes();
-  mostrarFlash('✓  Quantidade corrigida\npara ' + fmt(novaQtd) + ' chapas');
 }
 
 function removerPaleteBusca(ofNum, chave) {
