@@ -486,7 +486,8 @@ input.inp-grande {
     <div class="step-title"><span class="step-num">✓</span>Gerar Romaneio</div>
     <button class="btn btn-outline" id="btnResumoGerar" style="margin-top:0" onclick="toggleResumoGerarVisivel()">📋&nbsp;&nbsp;Ver resumo dos paletes</button>
     <div id="resumoGeral" style="display:none;margin-top:14px"></div>
-    <button class="btn btn-laranja" onclick="gerarExcel()">⬇&nbsp;&nbsp;BAIXAR EXCEL (ROMANEIO) E DAR BAIXA</button>
+    <button class="btn btn-laranja" onclick="gerarExcel(true)">⬇&nbsp;&nbsp;BAIXAR EXCEL (ROMANEIO) E DAR BAIXA</button>
+    <button class="btn btn-outline" onclick="gerarExcel(false)">📄&nbsp;&nbsp;GERAR RELATÓRIO (SEM DAR BAIXA)</button>
     <button class="btn btn-cinza" onclick="novaOf()">+&nbsp;&nbsp;Registrar outra OF</button>
     <button class="btn btn-outline" style="border-color:#c62828;color:#c62828" onclick="apagarDadosSalvos()">🗑&nbsp;&nbsp;Apagar seleção local (só depois de conferir o Excel)</button>
   </div>
@@ -1201,16 +1202,18 @@ function darBaixaEstoque(ofs) {
 }
 
 // ========== GERAR EXCEL ==========
-function gerarExcel() {
+// darBaixa=true: baixa o Excel e dá baixa no estoque (romaneio de expedição).
+// darBaixa=false: só gera o relatório, os paletes continuam em estoque.
+function gerarExcel(darBaixa) {
   const ofs = Object.keys(paletes).filter(k => paletes[k].length > 0);
   if (ofs.length === 0) return;
   // Mostra o aviso ANTES de gerar (writeFile é síncrono e trava a tela por instantes).
   // O setTimeout deixa a tela pintar a mensagem antes de começar a gerar/baixar.
-  mostrarFlash('⬇  Gerando e baixando\no romaneio em Excel...');
-  setTimeout(() => _gerarEBaixarExcel(ofs), 80);
+  mostrarFlash(darBaixa ? '⬇  Gerando e baixando\no romaneio em Excel...' : '⬇  Gerando o relatório\nem Excel...');
+  setTimeout(() => _gerarEBaixarExcel(ofs, darBaixa), 80);
 }
 
-function _gerarEBaixarExcel(ofs) {
+function _gerarEBaixarExcel(ofs, darBaixa) {
   const wb = XLSX.utils.book_new();
   const grupos = gruposSelecionados();
 
@@ -1260,8 +1263,12 @@ function _gerarEBaixarExcel(ofs) {
     ? '_'+(nomesClientes.length>3 ? nomesClientes.slice(0,3).join('-')+'+'+(nomesClientes.length-3) : nomesClientes.join('-'))
     : '';
   XLSX.writeFile(wb, 'Romaneio_'+data+clientesPart+'.xlsx');
-  darBaixaEstoque(ofs);
-  mostrarFlash('✓  Romaneio baixado e baixa registrada!');
+  if (darBaixa) {
+    darBaixaEstoque(ofs);
+    mostrarFlash('✓  Romaneio baixado e baixa registrada!');
+  } else {
+    mostrarFlash('✓  Relatório baixado!\nO estoque não foi alterado.');
+  }
 }
 
 // ========== FEEDBACKS ==========
